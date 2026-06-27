@@ -1,0 +1,1110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voice Agent OS - Rough Design</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080a0d;
+      --panel: #10141a;
+      --panel-2: #151a22;
+      --line: #252c36;
+      --text: #eef3f8;
+      --muted: #8d99a8;
+      --accent: #28d3a6;
+      --accent-2: #60a5fa;
+      --warn: #f3b34c;
+      --danger: #f87171;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        linear-gradient(180deg, rgba(40, 211, 166, 0.08), transparent 280px),
+        radial-gradient(circle at top right, rgba(96, 165, 250, 0.12), transparent 360px),
+        var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      border-right: 1px solid var(--line);
+      background: rgba(10, 13, 18, 0.92);
+      padding: 20px 14px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px 22px;
+    }
+
+    .mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: grid;
+      place-items: center;
+      color: #061014;
+      font-weight: 900;
+    }
+
+    .brand strong { display: block; font-size: 15px; }
+    .brand span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    nav { display: grid; gap: 4px; }
+
+    nav a {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      text-decoration: none;
+      color: var(--muted);
+      padding: 10px 10px;
+      border-radius: var(--radius);
+      font-size: 14px;
+    }
+
+    nav a.active,
+    nav a:hover {
+      color: var(--text);
+      background: #151b24;
+    }
+
+    .sidebar-section {
+      margin: 22px 10px 8px;
+      color: #677383;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .user {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: #0e1218;
+      font-size: 13px;
+    }
+
+    .user span { color: var(--muted); display: block; margin-top: 3px; }
+
+    main {
+      padding: 24px;
+      display: grid;
+      gap: 22px;
+      align-content: start;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 28px; letter-spacing: -0.02em; }
+    h2 { font-size: 17px; }
+    h3 { font-size: 14px; }
+    p { color: var(--muted); line-height: 1.5; }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button, .button {
+      border: 1px solid var(--line);
+      background: #141a22;
+      color: var(--text);
+      border-radius: var(--radius);
+      padding: 9px 12px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .primary {
+      border-color: rgba(40, 211, 166, 0.35);
+      background: linear-gradient(135deg, #1fc79b, #4f9ef8);
+      color: #061014;
+      font-weight: 800;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .hero {
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      align-items: stretch;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      background: rgba(16, 20, 26, 0.88);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+
+    .page-section {
+      display: none;
+    }
+
+    .page-section.active {
+      display: grid;
+    }
+
+    .support-section {
+      display: none;
+    }
+
+    .lifecycle-panel {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .brain-panel {
+      border: 1px solid rgba(40, 211, 166, 0.28);
+      border-radius: var(--radius);
+      background: #0d141b;
+      padding: 14px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .brain-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .mode {
+      border: 1px solid var(--line);
+      background: #111821;
+      border-radius: var(--radius);
+      padding: 16px;
+      min-height: 150px;
+    }
+
+    .mode strong {
+      display: block;
+      margin: 10px 0 8px;
+      font-size: 16px;
+    }
+
+    .icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: rgba(40, 211, 166, 0.12);
+      color: var(--accent);
+    }
+
+    .status-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #0d1218;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 24px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .operation-tabs {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .operation-tab {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: #0e141c;
+      min-height: 118px;
+    }
+
+    .operation-tab.active {
+      border-color: rgba(40, 211, 166, 0.5);
+      background: linear-gradient(180deg, rgba(40, 211, 166, 0.12), #0e141c);
+    }
+
+    .operation-tab span {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .operation-tab strong {
+      display: block;
+      margin: 8px 0 5px;
+      font-size: 15px;
+    }
+
+    .operation-tab p { font-size: 12px; }
+
+    .step {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #0e141c;
+      min-height: 86px;
+    }
+
+    .step .num {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+
+    .step strong {
+      display: block;
+      margin: 8px 0 5px;
+      font-size: 13px;
+    }
+
+    .step p { font-size: 12px; }
+
+    .two-col {
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 0.8fr);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      color: #b8c2cf;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #0b1016;
+      color: var(--text);
+      border-radius: var(--radius);
+      padding: 10px 11px;
+      font: inherit;
+      font-size: 14px;
+      outline: none;
+    }
+
+    textarea { min-height: 130px; resize: vertical; }
+    .wide { grid-column: 1 / -1; }
+
+    .platforms {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .platform {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #0e141c;
+    }
+
+    .platform.active {
+      border-color: rgba(40, 211, 166, 0.5);
+      box-shadow: inset 0 0 0 1px rgba(40, 211, 166, 0.18);
+    }
+
+    .platform span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .model-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .model-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: #0e141c;
+    }
+
+    .model-card strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .model-card p { font-size: 12px; }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: #0b1016;
+      margin-top: 12px;
+    }
+
+    .switch-row input {
+      width: auto;
+      accent-color: var(--accent);
+    }
+
+    .agent-network {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+      position: relative;
+    }
+
+    .agent-node {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: #0e141c;
+      min-height: 142px;
+      position: relative;
+    }
+
+    .agent-node::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -13px;
+      width: 13px;
+      height: 1px;
+      background: rgba(40, 211, 166, 0.45);
+    }
+
+    .agent-node:last-child::after { display: none; }
+
+    .agent-node span {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .agent-node strong {
+      display: block;
+      margin: 8px 0 7px;
+    }
+
+    .agent-node p { font-size: 12px; }
+
+    .recommendation {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: #0b1016;
+      margin-top: 14px;
+    }
+
+    .prompt-preview {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      white-space: pre-wrap;
+      color: #d9e4ef;
+      background: #080c12;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      max-height: 430px;
+      overflow: auto;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .test-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .test {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #0e141c;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      background: rgba(40, 211, 166, 0.12);
+      color: var(--accent);
+    }
+
+    .badge.warn {
+      background: rgba(243, 179, 76, 0.12);
+      color: var(--warn);
+    }
+
+    .badge.danger {
+      background: rgba(248, 113, 113, 0.12);
+      color: var(--danger);
+    }
+
+    .deploy-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .deploy {
+      border: 1px solid var(--line);
+      background: #0e141c;
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+
+    @media (max-width: 1050px) {
+      .app { grid-template-columns: 1fr; }
+      aside { position: relative; height: auto; }
+      .user { position: static; margin-top: 20px; }
+      .hero, .two-col { grid-template-columns: 1fr; }
+      .flow, .platforms, .deploy-grid, .status-strip, .operation-tabs, .model-grid, .agent-network, .lifecycle-panel, .brain-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .agent-node::after { display: none; }
+    }
+
+    @media (max-width: 640px) {
+      main { padding: 16px; }
+      .mode-grid, .form-grid, .flow, .platforms, .deploy-grid, .status-strip, .operation-tabs, .model-grid, .agent-network, .lifecycle-panel, .brain-grid { grid-template-columns: 1fr; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <div class="mark">V</div>
+        <div>
+          <strong>Voice Agent OS</strong>
+          <span>Inspra AI</span>
+        </div>
+      </div>
+
+      <nav>
+        <a class="active" href="#clients">Clients <span>01</span></a>
+        <a href="#tasks">Tasks <span>02</span></a>
+        <a href="#optimize-prompt">Optimize Prompt <span>03</span></a>
+        <a href="#new-prompt">New Prompt <span>04</span></a>
+      </nav>
+
+      <div class="user">
+        Dhruv Garg
+        <span>dhruv@inspra.ai</span>
+      </div>
+    </aside>
+
+    <main>
+      <section class="topbar" id="dashboard">
+        <div>
+          <h1>Voice Agent OS</h1>
+          <p>Generate, test, and push production-ready voice agent prompts.</p>
+        </div>
+        <div class="actions">
+          <a class="button" href="#optimize-prompt">Optimize Prompt</a>
+          <a class="button primary" href="#new-prompt">Generate New Prompt</a>
+        </div>
+      </section>
+
+      <section class="grid hero support-section" aria-label="Overview">
+        <div class="card">
+          <h2>Start a voice agent build</h2>
+          <p>Choose a clean operation, configure model autonomy, then generate or improve a production prompt.</p>
+
+          <div class="mode-grid">
+            <div class="mode">
+              <div class="icon">+</div>
+              <strong>Generate New Prompt</strong>
+              <p>Use discovery material, platform choice, model settings, and Voice Agent OS rules to create a fresh prompt.</p>
+            </div>
+
+            <div class="mode">
+              <div class="icon">R</div>
+              <strong>Optimize Existing Prompt</strong>
+              <p>Paste an existing LiveKit, Retell, Vapi, or Genius prompt and get a tested improved version.</p>
+            </div>
+          </div>
+
+          <div class="status-strip">
+            <div class="metric"><span>Prompts</span><strong>18</strong></div>
+            <div class="metric"><span>Testing</span><strong>4</strong></div>
+            <div class="metric"><span>Ready</span><strong>7</strong></div>
+            <div class="metric"><span>Pushed</span><strong>11</strong></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Current pipeline</h2>
+          <div class="test-list">
+            <div class="test">
+              <div>
+                <h3>Inbound Receptionist</h3>
+                <p>Retell - testing complete - awaiting approval</p>
+              </div>
+              <span class="badge warn">Review</span>
+            </div>
+            <div class="test">
+              <div>
+                <h3>Candidate Screener</h3>
+                <p>Vapi - prompt revision suggested</p>
+              </div>
+              <span class="badge danger">Fixes</span>
+            </div>
+            <div class="test">
+              <div>
+                <h3>After-hours Support Agent</h3>
+                <p>LiveKit - ready to push</p>
+              </div>
+              <span class="badge">Ready</span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="grid two-col page-section active" id="clients">
+        <div class="card">
+          <h2>Clients</h2>
+          <p>Manage real client work without using dummy client records.</p>
+          <div class="test-list">
+            <div class="test"><div><h3>Create client</h3><p>Add company, industry, contact, platform, and discovery source.</p></div><span class="badge">New</span></div>
+            <div class="test"><div><h3>Client workspace</h3><p>View briefs, prompts, QA reports, learnings, and production status.</p></div><span class="badge">Open</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Client details</h2>
+          <div class="form-grid">
+            <label>
+              Company
+              <input value="Select or create client" />
+            </label>
+            <label>
+              Platform
+              <select>
+                <option>LiveKit</option>
+                <option>Retell</option>
+                <option>Vapi</option>
+                <option>Genius</option>
+              </select>
+            </label>
+            <label>
+              Industry
+              <input value="Select industry" />
+            </label>
+            <label>
+              Status
+              <select>
+                <option>Discovery</option>
+                <option>Prompt build</option>
+                <option>Testing</option>
+                <option>Production</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid two-col page-section" id="tasks">
+        <div class="card">
+          <h2>Tasks</h2>
+          <p>Track prompt generation, optimization, testing, approval, and production push work.</p>
+          <div class="test-list">
+            <div class="test"><div><h3>Collect missing brief fields</h3><p>Ask only for details that block generation.</p></div><span class="badge warn">Needed</span></div>
+            <div class="test"><div><h3>Run scenario tests</h3><p>Validate behavior before approval.</p></div><span class="badge">Queued</span></div>
+            <div class="test"><div><h3>Prepare production config</h3><p>Package prompt, model, voice, and platform settings.</p></div><span class="badge">Ready</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Task filters</h2>
+          <div class="form-grid">
+            <label>
+              Owner
+              <select>
+                <option>AI owns next step</option>
+                <option>User approval needed</option>
+                <option>Manual task</option>
+              </select>
+            </label>
+            <label>
+              Priority
+              <select>
+                <option>Blocking</option>
+                <option>High</option>
+                <option>Normal</option>
+                <option>Backlog</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid two-col page-section" id="optimize-prompt">
+        <div class="card">
+          <h2>Optimize prompt</h2>
+          <p>Paste the current production prompt, then choose what the AI should improve.</p>
+          <div class="form-grid">
+            <div class="wide brain-panel">
+              <div>
+                <h2>System brain</h2>
+                <p>Model routing follows the Inspra Voice System: LLM selection, skill routing, validation, testing, and production packaging.</p>
+              </div>
+              <div class="brain-grid">
+                <label>LLM Provider<select><option>AI selects provider</option><option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Groq</option></select></label>
+                <label>LLM Model<select><option>AI selects best model</option><option>GPT-4.1</option><option>GPT-4.1 mini</option><option>Claude Sonnet</option><option>Gemini 2.5 Pro</option><option>Groq low-latency model</option></select></label>
+                <label>Temperature<input value="0.4" /></label>
+                <label>Max Tokens<input value="4000" /></label>
+                <label>Reasoning<select><option>Balanced</option><option>Fast</option><option>Deep</option></select></label>
+                <label>Autonomy<select><option>AI-led</option><option>Approval-led</option><option>Manual</option></select></label>
+              </div>
+            </div>
+            <label class="wide">
+              Previous prompt
+              <textarea style="min-height: 240px;">Paste the previous LiveKit, Retell, Vapi, Genius, or custom prompt here...</textarea>
+            </label>
+            <label class="wide">
+              Client feedback
+              <textarea>Paste client comments, call notes, objections, complaints, approval notes, or QA feedback here...</textarea>
+            </label>
+            <label>
+              Optimization target
+              <select>
+                <option>AI selects issues</option>
+                <option>Shorter voice responses</option>
+                <option>Better call flow</option>
+                <option>Stronger guardrails</option>
+                <option>Lower latency</option>
+              </select>
+            </label>
+            <label>
+              Skill Selection
+              <select>
+                <option>AI picks skills</option>
+                <option>I pick skills</option>
+                <option>Ask before using each skill</option>
+              </select>
+            </label>
+          </div>
+          <div class="actions" style="margin-top: 18px;">
+            <button>Run Audit</button>
+            <button class="primary">Optimize Prompt</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Prompt output</h2>
+          <div class="prompt-preview"># 1. Role & Objective
+You are the selected client's optimized voice agent.
+
+# 2. Personality & Tone
+Warm, concise, professional.
+
+# 3. Context
+Use the previous prompt, client feedback, platform settings, and Inspra Voice System learnings.
+
+# 4. Instructions
+Shorten long answers, improve call flow, preserve intent, and apply feedback.
+
+# 5. Guardrails
+Safety, off-topic, compliance, authority, data protection, transfer/exit.
+
+# 6. Call Flow
+Greeting -> Intent -> Qualification -> Answer / Action -> Confirmation -> Close.
+
+# 7. Example Interactions
+Caller asks for a human -> acknowledge and transfer.
+
+# 8. Knowledge Base
+Use approved client notes and feedback only.
+
+# 9. Voice Setup Checklist
+LLM, STT, TTS, VAD, platform config, QA, testing, latency review.</div>
+        </div>
+
+        <div class="lifecycle-panel">
+          <div class="card">
+            <h2>Testing</h2>
+            <div class="test-list">
+              <div class="test"><div><h3>QA checklist</h3><p>Role, tone, guardrails, transfer paths, data protection, and call-flow accuracy.</p></div><span class="badge">Ready</span></div>
+              <div class="test"><div><h3>Scenario tests</h3><p>Happy path, objection, restricted question, angry caller, silent caller, and booking confirmation.</p></div><span class="badge warn">Queued</span></div>
+            </div>
+            <div class="actions" style="margin-top: 14px;"><button>Run Tests</button></div>
+          </div>
+          <div class="card">
+            <h2>Push to production</h2>
+            <p>Package the optimized prompt with model config, platform notes, QA checklist, test report, and deployment handoff.</p>
+            <div class="actions" style="margin-top: 14px;"><button class="primary">Push to Production</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid two-col page-section" id="new-prompt">
+        <div class="card">
+          <h2>Generate prompt</h2>
+          <div class="form-grid">
+            <div class="wide brain-panel">
+              <div>
+                <h2>System brain</h2>
+                <p>Model routing follows the Inspra Voice System: LLM selection, skill routing, validation, testing, and production packaging.</p>
+              </div>
+              <div class="brain-grid">
+                <label>LLM Provider<select><option>AI selects provider</option><option>OpenAI</option><option>Anthropic</option><option>Google</option><option>Groq</option></select></label>
+                <label>LLM Model<select><option>AI selects best model</option><option>GPT-4.1</option><option>GPT-4.1 mini</option><option>Claude Sonnet</option><option>Gemini 2.5 Pro</option><option>Groq low-latency model</option></select></label>
+                <label>Temperature<input value="0.4" /></label>
+                <label>Max Tokens<input value="4000" /></label>
+                <label>Reasoning<select><option>Balanced</option><option>Fast</option><option>Deep</option></select></label>
+                <label>Autonomy<select><option>AI-led</option><option>Approval-led</option><option>Manual</option></select></label>
+              </div>
+            </div>
+            <label>
+              Client
+              <input value="Select or create client" />
+            </label>
+            <label>
+              Agent Type
+              <select>
+                <option>Inbound receptionist</option>
+                <option>Outbound sales</option>
+                <option>Appointment booking</option>
+                <option>FAQ handler</option>
+              </select>
+            </label>
+            <label>
+              Industry
+              <input value="Select industry" />
+            </label>
+            <label>
+              Voice Style
+              <select>
+                <option>Warm, concise, professional</option>
+                <option>Friendly and energetic</option>
+                <option>Calm and support-focused</option>
+              </select>
+            </label>
+            <label>
+              Skill Selection
+              <select>
+                <option>AI picks skills</option>
+                <option>I pick skills</option>
+                <option>Ask before using each skill</option>
+              </select>
+            </label>
+            <label class="wide">
+              Autonomy
+              <select>
+                <option>AI-led: continue unless blocked</option>
+                <option>Approval-led: ask before each phase</option>
+                <option>Manual: user controls every decision</option>
+              </select>
+            </label>
+            <label class="wide">
+              Discovery transcript / brief
+              <textarea>Paste Fathom transcript, discovery notes, client requirements, existing SOPs, or current prompt here...</textarea>
+            </label>
+          </div>
+
+          <h3 style="margin-top: 18px;">Choose production platform</h3>
+          <div class="platforms">
+            <div class="platform active"><strong>LiveKit</strong><span>Realtime stack</span></div>
+            <div class="platform"><strong>Retell</strong><span>Call agent setup</span></div>
+            <div class="platform"><strong>Vapi</strong><span>Assistant config</span></div>
+            <div class="platform"><strong>Genius</strong><span>Custom connector</span></div>
+          </div>
+
+          <div class="actions" style="margin-top: 18px;">
+            <button>Save Draft</button>
+            <button class="primary">Generate Prompt</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Prompt output</h2>
+          <div class="prompt-preview"># 1. Role & Objective
+You are the selected client's voice agent. Your objective is to qualify intent, answer approved questions, and route sensitive cases.
+
+# 2. Personality & Tone
+Warm, concise, professional. Ask one question at a time.
+
+# 3. Context
+Use discovery notes, platform settings, model routing, client wiki, and industry templates.
+
+# 4. Instructions
+Open, identify intent, qualify, answer or act, confirm, then transfer/book/close.
+
+# 5. Guardrails
+Safety, off-topic, compliance, authority, data protection, transfer/exit.
+
+# 6. Call Flow
+Greeting -> Intent -> Qualification -> Answer / Action -> Confirmation -> Close.
+
+# 7. Example Interactions
+Caller asks pricing guarantee -> decline guarantee and route to callback.
+
+# 8. Knowledge Base
+Use approved client notes and platform recommendations only.
+
+# 9. Voice Setup Checklist
+LLM, STT, TTS, VAD, platform config, QA, testing, latency review.</div>
+        </div>
+
+        <div class="lifecycle-panel">
+          <div class="card">
+            <h2>Testing</h2>
+            <div class="test-list">
+              <div class="test"><div><h3>QA checklist</h3><p>Role, tone, guardrails, transfer paths, data protection, and call-flow accuracy.</p></div><span class="badge">Ready</span></div>
+              <div class="test"><div><h3>Scenario tests</h3><p>Happy path, missing information, objection, restricted question, angry caller, silent caller, and booking confirmation.</p></div><span class="badge warn">Queued</span></div>
+            </div>
+            <div class="actions" style="margin-top: 14px;"><button>Run Tests</button></div>
+          </div>
+          <div class="card">
+            <h2>Push to production</h2>
+            <p>Package the generated prompt with model config, platform notes, QA checklist, test report, latency notes, and deployment handoff.</p>
+            <div class="actions" style="margin-top: 14px;"><button class="primary">Push to Production</button></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card support-section" id="models">
+        <h2>Model, autonomy, and skill routing</h2>
+        <p>Pick the model stack yourself or let the AI select the best configuration for the agent.</p>
+        <div class="model-grid">
+          <div class="model-card">
+            <strong>Reasoning model</strong>
+            <select>
+              <option>AI selects by task</option>
+              <option>OpenAI GPT-4.1</option>
+              <option>OpenAI GPT-4.1 mini</option>
+              <option>Anthropic Claude Sonnet</option>
+              <option>Google Gemini 2.5 Pro</option>
+            </select>
+            <p style="margin-top: 8px;">Used for prompt generation, QA review, and workflow decisions.</p>
+          </div>
+          <div class="model-card">
+            <strong>Voice runtime model</strong>
+            <select>
+              <option>AI selects by platform</option>
+              <option>Realtime voice model</option>
+              <option>Low-latency chat model</option>
+              <option>Cost-optimized chat model</option>
+            </select>
+            <p style="margin-top: 8px;">Used by the deployed agent for live calls and response generation.</p>
+          </div>
+          <div class="model-card" id="skills">
+            <strong>Skill owner</strong>
+            <select>
+              <option>AI picks required skills</option>
+              <option>I pick skills manually</option>
+              <option>Hybrid approval before run</option>
+            </select>
+            <p style="margin-top: 8px;">Controls whether voice QA, latency, diagrams, and prompt writing run automatically.</p>
+          </div>
+        </div>
+        <div class="switch-row">
+          <div>
+            <h3>Autonomy mode</h3>
+            <p>Allow the system to pick models, ask only blocking questions, and continue through validation.</p>
+          </div>
+          <label style="display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0; font-weight:700;">
+            <input type="checkbox" checked />
+            AI-led
+          </label>
+        </div>
+      </section>
+
+      <section class="card support-section" id="agents">
+        <h2>AIA agent orchestration</h2>
+        <p>The four agent sections are visually linked so the handoff from inputs to production is clear.</p>
+        <div class="agent-network">
+          <div class="agent-node"><span>Interlink 01</span><strong>Research Agent</strong><p>Selects LLM, STT, TTS, voice, latency targets, and platform constraints.</p></div>
+          <div class="agent-node"><span>Interlink 02</span><strong>Prompt Agent</strong><p>Writes the 9-section voice prompt using the selected skill route.</p></div>
+          <div class="agent-node"><span>Interlink 03</span><strong>Validation Agent</strong><p>Runs QA, scenario testing, guardrail checks, and model fit review.</p></div>
+          <div class="agent-node"><span>Interlink 04</span><strong>Deploy Agent</strong><p>Maps the final build into LiveKit, Retell, Vapi, Genius, or custom output.</p></div>
+        </div>
+      </section>
+
+      <section class="grid two-col support-section" id="testing">
+        <div class="card">
+          <h2>Generated prompt preview</h2>
+          <div class="prompt-preview"># 1. Role & Objective
+You are the selected client's inbound AI receptionist. Your goal is to qualify callers, answer common questions, and route high-intent leads to the correct team member.
+
+# 2. Personality & Tone
+Warm, confident, concise. Keep responses short enough for voice. Ask one question at a time.
+
+# 3. Context
+The caller may be a buyer, seller, tenant, landlord, or existing customer...
+
+# 4. Instructions
+- Greet the caller.
+- Identify caller intent.
+- Collect name, phone, suburb, property type, and urgency.
+- Handle objections without overpromising.
+
+# 5. Guardrails
+Do not provide legal, financial, or valuation guarantees. Escalate pricing-sensitive questions.
+
+# 6. Call Flow
+Greeting -> Intent -> Qualification -> Answer / Transfer / Booking -> Confirmation -> Close.</div>
+          <div class="actions" style="margin-top: 14px;">
+            <button>Copy Prompt</button>
+            <button class="primary">Push to Production</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Scenario test report</h2>
+          <p>Tests run against voice-specific behavior, guardrails, platform readiness, and call-flow accuracy.</p>
+          <div class="test-list">
+            <div class="test"><div><h3>Happy path buyer inquiry</h3><p>Collected required fields and closed correctly.</p></div><span class="badge">Pass</span></div>
+            <div class="test"><div><h3>Caller asks for valuation guarantee</h3><p>Refused guarantee, but response was too long for voice.</p></div><span class="badge warn">Improve</span></div>
+            <div class="test"><div><h3>Angry caller asks for human</h3><p>Transfer path needs clearer escalation rule.</p></div><span class="badge danger">Fix</span></div>
+            <div class="test"><div><h3>Silent caller / no input</h3><p>Reprompt behavior is acceptable for LiveKit.</p></div><span class="badge">Pass</span></div>
+          </div>
+
+          <div class="recommendation">
+            <h3>Suggested changes</h3>
+            <p>Shorten compliance responses, add explicit human-transfer rule, and tighten the booking confirmation step.</p>
+            <div class="actions" style="margin-top: 12px;">
+              <button>Reject</button>
+              <button class="primary">Apply Changes</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card support-section" id="production">
+        <h2>Push to production</h2>
+        <p>After approval, choose the target platform. The app maps the final prompt into the right production format.</p>
+        <div class="deploy-grid">
+          <div class="deploy"><h3>LiveKit</h3><p>Prompt, realtime settings, turn-taking notes, voice config.</p></div>
+          <div class="deploy"><h3>Retell</h3><p>Agent prompt, call flow, functions, escalation, outcomes.</p></div>
+          <div class="deploy"><h3>Vapi</h3><p>Assistant prompt, tools, first message, end-call behavior.</p></div>
+          <div class="deploy"><h3>Genius</h3><p>Connector placeholder until API rules are finalized.</p></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    const mainPages = ["clients", "tasks", "optimize-prompt", "new-prompt"];
+    const pageLinks = document.querySelectorAll('a[href^="#"]');
+
+    function showPage(pageId, updateHash = true) {
+      if (!mainPages.includes(pageId)) return;
+
+      document.querySelectorAll(".page-section").forEach((section) => {
+        section.classList.toggle("active", section.id === pageId);
+      });
+
+      pageLinks.forEach((link) => {
+        const target = link.getAttribute("href").slice(1);
+        link.classList.toggle("active", target === pageId);
+      });
+
+      if (updateHash) {
+        history.replaceState(null, "", `#${pageId}`);
+      }
+    }
+
+    pageLinks.forEach((link) => {
+      const pageId = link.getAttribute("href").slice(1);
+      if (!mainPages.includes(pageId)) return;
+
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        showPage(pageId);
+      });
+    });
+
+    showPage(location.hash.slice(1) || "clients", false);
+  </script>
+</body>
+</html>
