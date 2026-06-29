@@ -4,43 +4,57 @@ Full-stack app split into:
 
 - `frontend/` - React + Vite app
 - `backend/` - Node.js + Express API
-- Firebase Auth for login/signup/reset
-- Firebase Firestore for clients, tasks, and prompt jobs
+- Supabase Auth for login/signup/reset
+- Supabase Postgres for clients, tasks, and prompt jobs
+
+## Supabase Project
+
+Project URL:
+
+```text
+https://ymsooxqtwlttpqjnmumb.supabase.co
+```
+
+Dashboard:
+
+```text
+https://supabase.com/dashboard/project/ymsooxqtwlttpqjnmumb
+```
 
 ## Setup
 
-### 1. Firebase
+### 1. Configure Supabase
 
-Create a Firebase project, then enable:
+In the Supabase dashboard:
 
-- Authentication -> Email/Password
-- Firestore Database
+1. Open `SQL Editor`.
+2. Run the SQL in `supabase/schema.sql`.
+3. Open `Authentication > Sign In / Providers > Email`.
+4. For local development, disable email confirmation if you want signup to log in immediately.
+5. Copy the project publishable key from the Connect dialog or `Settings > API Keys`.
 
 ### 2. Frontend environment
 
-Add your Firebase web app keys in `frontend/.env`:
+Create `frontend/.env`:
 
 ```env
 VITE_API_URL=http://localhost:5000
-VITE_FIREBASE_API_KEY=your_web_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
+VITE_SUPABASE_URL=https://ymsooxqtwlttpqjnmumb.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key_here
 ```
 
 ### 3. Backend environment
 
-Create a Firebase service account and add these values in `backend/.env`:
+Create `backend/.env`:
 
 ```env
 PORT=5000
 CLIENT_URL=http://localhost:5173
-FIREBASE_PROJECT_ID=your_project_id
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your_project.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+SUPABASE_URL=https://ymsooxqtwlttpqjnmumb.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key_here
 ```
+
+The backend uses the caller's Supabase access token for database requests, so Row Level Security policies apply to every API call. Do not put a Supabase secret or service-role key in the frontend.
 
 ## Run
 
@@ -69,6 +83,6 @@ Open `http://localhost:5173`.
 - Password reset
 - Protected app shell
 - Independent tabs for Clients, Tasks, Optimize Prompt, and New Prompt
-- Firestore-backed clients and tasks
-- Backend token verification with Firebase Admin
+- Supabase-backed clients, tasks, and prompt jobs
+- Backend token verification with Supabase Auth
 - Prompt generation and optimization job storage
