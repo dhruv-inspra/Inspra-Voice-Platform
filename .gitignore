@@ -14,7 +14,15 @@ firebase-service-account.json
 # Local dev server logs
 dev-server*.log
 **/dev-server*.log
+backend-*.log
+vite-*.log
 server.out.log
 server.err.log
 **/server.out.log
 **/server.err.log
+
+# Local browser/test artifacts
+.playwright-mcp/
+
+# Extracted archive metadata
+__MACOSX/

@@ -14,7 +14,18 @@ const collectionConfig = {
       title: "title",
       priority: "priority",
       owner: "owner",
-      status: "status"
+      status: "status",
+      source: "source",
+      stakeholder: "stakeholder",
+      severity: "severity",
+      bucket: "bucket",
+      safeToFix: "safe_to_fix",
+      approvalRequired: "approval_required",
+      evidence: "evidence",
+      proposedFix: "proposed_fix",
+      appliedFix: "applied_fix",
+      verificationResult: "verification_result",
+      rollbackDetails: "rollback_details"
     }
   },
   promptJobs: {
@@ -35,10 +46,24 @@ const collectionConfig = {
       clientFeedback: "client_feedback",
       optimizationTarget: "optimization_target",
       output: "output",
+      blueprint: "blueprint",
+      callScript: "sales_script",
+      salesScript: "sales_script",
+      callFlowChart: "call_flow_chart",
+      agentPrompt: "agent_prompt",
+      integrationBlueprint: "integration_flowchart",
+      integrationFlowchart: "integration_flowchart",
+      elkDescription: "elk_description",
+      elkSchema: "elk_schema",
+      elkPostBody: "elk_post_body",
+      elkFunctionConfig: "elk_function_config",
       qaChecklist: "qa_checklist",
+      qaGates: "qa_gates",
       testReport: "test_report",
       latencyNotes: "latency_notes",
-      deploymentPackage: "deployment_package"
+      deploymentPackage: "deployment_package",
+      releasePolicy: "release_policy",
+      obsidianLearning: "obsidian_learning"
     }
   }
 };

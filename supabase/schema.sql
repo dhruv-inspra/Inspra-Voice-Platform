@@ -3,7 +3,7 @@ create table if not exists public.clients (
   user_id uuid not null references auth.users(id) on delete cascade,
   company text not null default 'Untitled client',
   industry text not null default '',
-  platform text not null default 'LiveKit',
+  platform text not null default 'Elk',
   status text not null default 'Discovery',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -16,6 +16,17 @@ create table if not exists public.tasks (
   priority text not null default 'Normal',
   owner text not null default 'AI owns next step',
   status text not null default 'Queued',
+  source text not null default 'Manual',
+  stakeholder text not null default '',
+  severity text not null default 'Normal',
+  bucket text not null default 'Agent non-prompt config',
+  safe_to_fix boolean not null default true,
+  approval_required boolean not null default false,
+  evidence text not null default '',
+  proposed_fix text not null default '',
+  applied_fix text not null default '',
+  verification_result text not null default '',
+  rollback_details text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -25,9 +36,9 @@ create table if not exists public.prompt_jobs (
   user_id uuid not null references auth.users(id) on delete cascade,
   type text not null default 'new',
   client text not null default 'Selected client',
-  platform text not null default 'LiveKit',
-  llm_provider text not null default 'AI selects provider',
-  llm_model text not null default 'AI selects best model',
+  platform text not null default 'Elk',
+  llm_provider text not null default 'OpenRouter',
+  llm_model text not null default 'OpenRouter auto model',
   temperature text not null default '0.4',
   max_tokens text not null default '4000',
   reasoning_mode text not null default 'Balanced',
@@ -38,13 +49,50 @@ create table if not exists public.prompt_jobs (
   client_feedback text not null default '',
   optimization_target text not null default 'AI selects issues',
   output text not null default '',
+  blueprint text not null default '',
+  sales_script text not null default '',
+  call_flow_chart text not null default '',
+  agent_prompt text not null default '',
+  integration_flowchart text not null default '',
+  elk_description text not null default '',
+  elk_schema text not null default '',
+  elk_post_body text not null default '',
+  elk_function_config text not null default '',
   qa_checklist text not null default '',
+  qa_gates text not null default '',
   test_report text not null default '',
   latency_notes text not null default '',
   deployment_package text not null default '',
+  release_policy text not null default '',
+  obsidian_learning text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.tasks add column if not exists source text not null default 'Manual';
+alter table public.tasks add column if not exists stakeholder text not null default '';
+alter table public.tasks add column if not exists severity text not null default 'Normal';
+alter table public.tasks add column if not exists bucket text not null default 'Agent non-prompt config';
+alter table public.tasks add column if not exists safe_to_fix boolean not null default true;
+alter table public.tasks add column if not exists approval_required boolean not null default false;
+alter table public.tasks add column if not exists evidence text not null default '';
+alter table public.tasks add column if not exists proposed_fix text not null default '';
+alter table public.tasks add column if not exists applied_fix text not null default '';
+alter table public.tasks add column if not exists verification_result text not null default '';
+alter table public.tasks add column if not exists rollback_details text not null default '';
+
+alter table public.prompt_jobs add column if not exists blueprint text not null default '';
+alter table public.prompt_jobs add column if not exists sales_script text not null default '';
+alter table public.prompt_jobs add column if not exists call_flow_chart text not null default '';
+alter table public.prompt_jobs add column if not exists agent_prompt text not null default '';
+alter table public.prompt_jobs add column if not exists integration_flowchart text not null default '';
+alter table public.prompt_jobs add column if not exists elk_description text not null default '';
+alter table public.prompt_jobs add column if not exists elk_schema text not null default '';
+alter table public.prompt_jobs add column if not exists elk_post_body text not null default '';
+alter table public.prompt_jobs add column if not exists elk_function_config text not null default '';
+alter table public.prompt_jobs add column if not exists qa_gates text not null default '';
+alter table public.prompt_jobs add column if not exists release_policy text not null default '';
+alter table public.prompt_jobs add column if not exists obsidian_learning text not null default '';
 
 create index if not exists clients_user_updated_idx on public.clients(user_id, updated_at desc);
 create index if not exists tasks_user_updated_idx on public.tasks(user_id, updated_at desc);

@@ -8,9 +8,19 @@ import { isSupabaseReady, isAdminConfigured } from "./supabaseClient.js";
 import { acceptInvite, createInvite, listInvites } from "./invites.js";
 import { listMembers, setMemberRole } from "./team.js";
 import { isEmailConfigured } from "./email.js";
+import { buildPromptPackage, classifyWorkItem } from "./promptPackage.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
+
+function normaliseOpenRouterModel(value) {
+  return value && String(value).toLowerCase().includes("/") ? value : "OpenRouter auto model";
+}
+
+function normalisePlatform(value) {
+  const allowed = new Set(["Elk", "Retell", "Vapi"]);
+  return allowed.has(value) ? value : "Elk";
+}
 
 app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173", credentials: true }));
 app.use(express.json({ limit: "2mb" }));
@@ -21,7 +31,8 @@ app.get("/api/health", (_req, res) => {
     ok: true,
     supabaseReady: isSupabaseReady(),
     adminReady: isAdminConfigured(),
-    emailReady: isEmailConfigured()
+    emailReady: isEmailConfigured(),
+    obsidianFlowReady: Boolean(process.env.OBSIDIAN_VAULT_PATH || process.env.OBSIDIAN_NOTES_PATH)
   });
 });
 
@@ -110,7 +121,7 @@ app.post("/api/clients", requireAuth, async (req, res, next) => {
     const client = await createUserDoc(req.supabase, req.user.uid, "clients", {
       company: req.body.company || "Untitled client",
       industry: req.body.industry || "",
-      platform: req.body.platform || "LiveKit",
+      platform: normalisePlatform(req.body.platform),
       status: req.body.status || "Discovery"
     });
     res.status(201).json({ client });
@@ -148,11 +159,23 @@ app.get("/api/tasks", requireAuth, async (req, res, next) => {
 
 app.post("/api/tasks", requireAuth, async (req, res, next) => {
   try {
+    const triage = classifyWorkItem(`${req.body.title || ""} ${req.body.source || ""}`);
     const task = await createUserDoc(req.supabase, req.user.uid, "tasks", {
       title: req.body.title || "Untitled task",
       priority: req.body.priority || "Normal",
       owner: req.body.owner || "AI owns next step",
-      status: req.body.status || "Queued"
+      status: req.body.status || "Queued",
+      source: req.body.source || "Manual",
+      stakeholder: req.body.stakeholder || "",
+      severity: req.body.severity || req.body.priority || "Normal",
+      bucket: req.body.bucket || triage.bucket,
+      safeToFix: req.body.safeToFix ?? triage.safeToFix,
+      approvalRequired: req.body.approvalRequired ?? triage.approvalRequired,
+      evidence: req.body.evidence || "",
+      proposedFix: req.body.proposedFix || "",
+      appliedFix: req.body.appliedFix || "",
+      verificationResult: req.body.verificationResult || "",
+      rollbackDetails: req.body.rollbackDetails || ""
     });
     res.status(201).json({ task });
   } catch (error) {
@@ -169,15 +192,48 @@ app.patch("/api/tasks/:id", requireAuth, async (req, res, next) => {
   }
 });
 
+app.get("/api/prompt-jobs", requireAuth, async (req, res, next) => {
+  try {
+    const promptJobs = await listUserCollection(req.supabase, "promptJobs");
+    res.json({ promptJobs });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/agent-prompts", requireAuth, async (req, res, next) => {
+  try {
+    const prompt = String(req.body.prompt || "").trim();
+    if (!prompt) {
+      return res.status(400).json({ message: "Prompt is required." });
+    }
+
+    const promptJob = await createUserDoc(req.supabase, req.user.uid, "promptJobs", {
+      type: "manual-agent-prompt",
+      client: req.body.client || "Selected client",
+      platform: normalisePlatform(req.body.platform),
+      llmProvider: "Manual",
+      llmModel: "Manual prompt",
+      output: prompt,
+      agentPrompt: prompt,
+      sourceBrief: "Manual agent prompt version"
+    });
+
+    res.status(201).json({ promptJob });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/prompts/generate", requireAuth, async (req, res, next) => {
   try {
     const packageOutput = buildPromptPackage(req.body, "create");
     const promptJob = await createUserDoc(req.supabase, req.user.uid, "promptJobs", {
       type: "new",
       client: req.body.client || "Selected client",
-      platform: req.body.platform || "LiveKit",
-      llmProvider: req.body.llmProvider || "AI selects provider",
-      llmModel: req.body.llmModel || "AI selects best model",
+      platform: normalisePlatform(req.body.platform),
+      llmProvider: "OpenRouter",
+      llmModel: normaliseOpenRouterModel(req.body.llmModel),
       temperature: req.body.temperature || "0.4",
       maxTokens: req.body.maxTokens || "4000",
       reasoningMode: req.body.reasoningMode || "Balanced",
@@ -198,11 +254,12 @@ app.post("/api/prompts/optimize", requireAuth, async (req, res, next) => {
     const packageOutput = buildPromptPackage(req.body, "enhance");
     const promptJob = await createUserDoc(req.supabase, req.user.uid, "promptJobs", {
       type: "optimize",
+      client: req.body.client || "Selected client",
       previousPrompt: req.body.previousPrompt || "",
       clientFeedback: req.body.clientFeedback || "",
       optimizationTarget: req.body.optimizationTarget || "AI selects issues",
-      llmProvider: req.body.llmProvider || "AI selects provider",
-      llmModel: req.body.llmModel || "AI selects best model",
+      llmProvider: "OpenRouter",
+      llmModel: normaliseOpenRouterModel(req.body.llmModel),
       temperature: req.body.temperature || "0.4",
       maxTokens: req.body.maxTokens || "4000",
       reasoningMode: req.body.reasoningMode || "Balanced",
@@ -226,107 +283,3 @@ app.use((error, _req, res, _next) => {
 app.listen(port, () => {
   console.log(`Backend running on http://localhost:${port}`);
 });
-
-function buildPromptPackage(body, mode) {
-  const client = body.client || "the selected client";
-  const platform = body.platform || "LiveKit";
-  const agentType = body.agentType || "voice agent";
-  const voiceStyle = body.voiceStyle || "Warm, concise, professional";
-  const llmProvider = body.llmProvider || "AI selects provider";
-  const llmModel = body.llmModel || "AI selects best model";
-  const skillSelection = body.skillSelection || "AI picks skills";
-  const autonomy = body.autonomy || "AI-led";
-  const sourceBrief = body.sourceBrief || "No discovery brief supplied yet.";
-  const previousPrompt = body.previousPrompt || "No previous prompt supplied.";
-  const clientFeedback = body.clientFeedback || "No client feedback supplied yet.";
-  const optimizationTarget = body.optimizationTarget || "AI selects issues";
-
-  const contextSource = mode === "enhance"
-    ? `Existing prompt:\n${previousPrompt}\n\nClient feedback:\n${clientFeedback}\n\nOptimization target: ${optimizationTarget}`
-    : `Discovery brief:\n${sourceBrief}`;
-
-  const output = `# 1. Role & Objective
-You are ${client}'s ${agentType}. Your objective is to handle voice calls accurately, qualify intent, answer approved questions, and route high-intent or sensitive cases to the correct human path.
-
-# 2. Personality & Tone
-Use this tone: ${voiceStyle}. Keep responses short enough for live voice. Sound helpful, calm, and direct. Ask one question at a time.
-
-# 3. Context
-Platform: ${platform}
-LLM provider: ${llmProvider}
-LLM model: ${llmModel}
-Skill routing: ${skillSelection}
-Autonomy: ${autonomy}
-
-Source material:
-${contextSource}
-
-# 4. Instructions including Objection Handling
-- Open with a concise greeting and identify the caller's intent.
-- Collect only the fields required for the current outcome.
-- Confirm important details before booking, transferring, or ending the call.
-- Handle objections by acknowledging the concern, giving the shortest approved answer, then returning to the next useful step.
-- If the caller is confused, slow down and ask a simpler single question.
-
-# 5. Guardrails
-A. Safety: do not provide emergency, medical, legal, financial, or safety-critical advice.
-B. Off-Topic: redirect politely to the caller's original purpose.
-C. Compliance: do not make guarantees, quote unapproved pricing, or invent policy.
-D. Authority: do not claim to be a human employee.
-E. Data Protection: collect only necessary personal data and never expose internal notes.
-F. Transfer/Exit: transfer or schedule a callback when the caller asks for a human, becomes upset, or reaches a restricted topic.
-
-# 6. Call Flow
-Greeting -> Intent -> Qualification -> Answer or Action -> Confirmation -> Transfer / Booking / Close.
-
-# 7. Example Interactions
-Caller: "Can you help me book a call?"
-Agent: "Yes. I can help with that. What day works best for you?"
-
-Caller: "Can you guarantee the price?"
-Agent: "I cannot guarantee pricing. I can arrange a callback with the right person to confirm the details."
-
-# 8. Knowledge Base
-Use only approved discovery notes, client wiki patterns, platform recommendations, industry templates, client feedback, and production configuration. If information is missing or conflicting, ask a clarifying question before proceeding.
-
-# 9. Voice Setup Checklist
-- LLM: ${llmProvider} / ${llmModel}
-- Temperature: ${body.temperature || "0.4"}
-- Max tokens: ${body.maxTokens || "4000"}
-- Reasoning mode: ${body.reasoningMode || "Balanced"}
-- Platform: ${platform}
-- STT/TTS/Voice: select during Phase 1 research.
-- VAD/turn-taking: tune for short responses and low interruption risk.
-- QA: run checklist, scenario tests, and latency review before production.`;
-
-  return {
-    output,
-    qaChecklist: buildQaChecklist(platform),
-    testReport: buildTestReport(mode),
-    latencyNotes: buildLatencyNotes(platform),
-    deploymentPackage: buildDeploymentPackage(platform, llmProvider, llmModel)
-  };
-}
-
-function buildQaChecklist(platform) {
-  return [
-    "Role and objective are explicit.",
-    "Tone is voice-first and concise.",
-    "Guardrails include safety, off-topic, compliance, authority, data protection, and transfer rules.",
-    "Call flow has clear success, fallback, and exit paths.",
-    `Platform readiness checked for ${platform}.`
-  ].join(" ");
-}
-
-function buildTestReport(mode) {
-  const label = mode === "enhance" ? "optimized prompt" : "new prompt";
-  return `Prepared scenario report for ${label}: happy path, missing information, objection, restricted question, angry caller, human transfer, silent caller, and booking confirmation.`;
-}
-
-function buildLatencyNotes(platform) {
-  return `Latency review queued for ${platform}: check model response time, STT endpointing, TTS voice latency, VAD sensitivity, and interruption handling.`;
-}
-
-function buildDeploymentPackage(platform, llmProvider, llmModel) {
-  return `Production package ready for ${platform}: system prompt, LLM config (${llmProvider} / ${llmModel}), QA checklist, test report, latency notes, and handoff checklist.`;
-}

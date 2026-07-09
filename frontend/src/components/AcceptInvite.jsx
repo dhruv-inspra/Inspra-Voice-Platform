@@ -60,7 +60,7 @@ export default function AcceptInvite({ token, onDone }) {
     <AuthShell
       eyebrow="Invitation"
       title="Set up your account"
-      subtitle="Choose a name and password to join the Voice Agent OS workspace."
+      subtitle="Choose a name and password to join INSPRA."
       footer={<span>Next, you'll secure the account with two-factor authentication.</span>}
     >
       <form className="auth2-form" onSubmit={handleSubmit}>

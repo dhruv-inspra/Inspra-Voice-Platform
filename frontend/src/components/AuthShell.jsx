@@ -22,8 +22,8 @@ export default function AuthShell({
           <div className="brandmark">
             <span className="brandmark-glyph">◈</span>
             <span className="brandmark-text">
-              <strong>Voice Agent OS</strong>
-              <em>Inspra AI</em>
+              <strong>INSPRA</strong>
+              <em>Voice workspace</em>
             </span>
           </div>
         </div>
@@ -35,9 +35,9 @@ export default function AuthShell({
         </div>
 
         <p className="auth2-railnote">
-          Design the voice. Tune the signal.
+          Manage prompts. Keep versions.
           <br />
-          Ship agents that sound human.
+          Ship cleaner voice agents.
         </p>
       </aside>
 
