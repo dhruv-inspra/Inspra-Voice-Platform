@@ -19,7 +19,7 @@ test("buildPromptPackage creates the required Voice Agent OS artifacts", () => {
     "create"
   );
 
-  assert.match(result.output, /# 1\. Role & Objective/);
+  assert.match(result.output, /## Role/);
   assert.match(result.blueprint, /Acme Dental/);
   assert.match(result.callScript, /Opening/);
   assert.match(result.salesScript, /Opening/);
@@ -30,6 +30,85 @@ test("buildPromptPackage creates the required Voice Agent OS artifacts", () => {
   assert.doesNotThrow(() => JSON.parse(result.elkExport.openaiSchemaJson));
   assert.doesNotThrow(() => JSON.parse(result.elkExport.postBodyJson));
   assert.match(result.elkExport.functionConfigMd, /success condition/i);
+});
+
+test("buildPromptPackage uses Elk prompt structure and variable names", () => {
+  const result = buildPromptPackage(
+    {
+      client: "NextGen Innovations",
+      agentType: "Outbound",
+      platform: "Elk",
+      sourceBrief: "Call equipment hire businesses and create interest in a demo.",
+      voiceStyle: "Warm, confident, and natural"
+    },
+    "create"
+  );
+
+  const expectedSections = [
+    "## Role",
+    "## Tools",
+    "## Speaking Style",
+    "## Product Summary",
+    "## Product Detail Answers",
+    "## Opening",
+    "## Main Pitch",
+    "## Discovery",
+    "## Short Response Rules",
+    "## Call To Action",
+    "## Demo Or Callback Capture",
+    "## Phone Number",
+    "## Objections",
+    "## When Challenged",
+    "## Gatekeeper",
+    "## Unknown Questions",
+    "## Silence Handling",
+    "## Sample Dialogues",
+    "## Hard Rules"
+  ];
+
+  for (const section of expectedSections) {
+    assert.match(result.output, new RegExp(section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+
+  assert.match(result.output, /Current date and time: \{\{CURRENT_DATE_TIME\}\}/);
+  assert.match(result.output, /Prospect Name: \{\{firstName\}\}/);
+  assert.match(result.output, /Customer Phone: \{\{customer_phone\}\}/);
+  assert.match(result.output, /Available tools: `demo_book`, `end_call`/);
+  assert.match(result.output, /`caller_name`/);
+  assert.match(result.output, /`phone_number`/);
+  assert.match(result.output, /`preferred_callback_date`/);
+  assert.match(result.output, /`preferred_callback_time`/);
+  assert.match(result.output, /Do not collect email\./);
+  assert.match(result.output, /"Perfect\. I'll pass that through to the NextGen Innovations team now\."/);
+  assert.match(result.output, /Never mention Inspra or Elk\./);
+
+  const schema = JSON.parse(result.elkExport.openaiSchemaJson);
+  assert.deepEqual(schema.required, [
+    "caller_name",
+    "phone_number",
+    "preferred_callback_date",
+    "preferred_callback_time"
+  ]);
+});
+
+test("buildPromptPackage aligns docs with Obsidian and Diagram Skill deliverables", () => {
+  const result = buildPromptPackage(
+    {
+      client: "Acme Dental",
+      platform: "Elk",
+      sourceBrief: "Inbound calls need booking, triage, and follow-up learning."
+    },
+    "create"
+  );
+
+  assert.match(result.blueprint, /Diagram Skill Package/);
+  assert.match(result.blueprint, /Title Page/);
+  assert.match(result.blueprint, /Diagram Walkthrough/);
+  assert.match(result.blueprint, /Next Steps/);
+  assert.match(result.integrationBlueprint, /Obsidian Flow/);
+  assert.match(result.integrationBlueprint, /YAML properties/);
+  assert.match(result.obsidianLearning, /source_artifact: "prompt_package"/);
+  assert.match(result.obsidianLearning, /diagram_skill_aligned: true/);
 });
 
 test("buildPromptPackage defaults to Elk and OpenRouter model routing", () => {
@@ -85,7 +164,7 @@ test("buildPromptPackage normalizes unsupported platforms and agent types", () =
     "create"
   );
 
-  assert.match(result.output, /You are Acme Dental's Inbound\./);
+  assert.match(result.output, /You are an inbound AI voice assistant calling on behalf of Acme Dental\./);
   assert.match(result.output, /Platform: Elk/);
   assert.match(result.output, /LLM provider: OpenRouter/);
   assert.match(result.output, /LLM model: OpenRouter auto model/);

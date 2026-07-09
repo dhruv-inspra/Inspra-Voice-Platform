@@ -213,7 +213,7 @@ Check the `README.md` in the output folder first — it links everything and lis
 - Run through the QA checklist before handing to client
 
 ### Step 7 — Share with Client
-The PDFs (call flow + SOW blueprint) are client-facing.  
+The diagram PDF and standalone companion write-up PDF are client-facing.  
 The system prompt and agent config go to whoever is deploying on the platform.
 
 ### Step 8 — After Testing
@@ -274,13 +274,13 @@ Skills are specialist sub-systems Claude invokes during ORCHESTRATE or on demand
 
 | Skill | When It Runs | What It Does |
 |-------|-------------|--------------|
-| `inspra-voice` | Phase 2 of ORCHESTRATE | Writes the full 9-section system prompt |
+| `inspra-voice` | Phase 2 of ORCHESTRATE | Writes or updates production voice prompts; Elk builds use the Elk section structure and variables |
 | `llm-selection-guide` | Phase 1 of ORCHESTRATE | Selects LLM provider, model, and config |
 | `stt-tts-selection-guide` | Phase 1 of ORCHESTRATE | Selects STT, TTS, and voice |
 | `latency-optimizer` | Phase 3 of ORCHESTRATE | Analyses latency, recommends optimisations |
 | `voice-qa-checklist` | Phase 3 of ORCHESTRATE | Generates pre-launch QA checklist |
 | `agent-ops-testing` | Phase 3 of ORCHESTRATE | Writes test scenarios and scoring rubric |
-| `Diagram-Skill-v2` | Phase 3 of ORCHESTRATE | Generates call flow + SOW blueprint as PDFs |
+| `Diagram-Skill-v2` | Phase 3 of ORCHESTRATE | Generates the diagram PDF and standalone companion write-up PDF |
 | `agent-ops-mom` | On demand | Generates meeting minutes from transcript |
 
 **To invoke a skill directly** (outside ORCHESTRATE), just describe what you need:  
@@ -291,32 +291,52 @@ Skills are specialist sub-systems Claude invokes during ORCHESTRATE or on demand
 
 This is the core prompt engineering skill. It operates in three modes:
 
-- **Create mode:** Builds a fresh 9-section system prompt from scratch
+- **Create mode:** Builds a fresh production prompt from scratch
 - **Enhance mode:** Audits an existing prompt and fixes it
 - **Educate mode:** Answers questions about voice agent prompt design
 
-The 9 sections of every prompt it writes:
-1. Role & Objective
-2. Personality & Tone
-3. Context
-4. Instructions (including Objection Handling)
-5. Guardrails (A: Safety · B: Off-Topic · C: Compliance · D: Authority · E: Data Protection · F: Transfer/Exit)
-6. Call Flow
-7. Example Interactions
-8. Knowledge Base (if applicable)
-9. Voice Setup Checklist
+For Elk, prompts follow the production example shape in `Prompt.md.md`:
+1. Role
+2. Tools
+3. Speaking Style
+4. Product Summary
+5. Product Detail Answers
+6. Opening
+7. Main Pitch
+8. Discovery
+9. Short Response Rules
+10. Call To Action
+11. Demo Or Callback Capture
+12. Phone Number
+13. Objections
+14. When Challenged
+15. Gatekeeper
+16. Unknown Questions
+17. Silence Handling
+18. Sample Dialogues
+19. Hard Rules
+
+The Elk variables are standardised as `{{CURRENT_DATE_TIME}}`, `{{firstName}}`, `{{customer_phone}}`, `caller_name`, `phone_number`, `preferred_callback_date`, and `preferred_callback_time`.
+
+For non-Elk platform work, the generic voice-agent template can still use the classic Role, Personality, Context, Instructions, Guardrails, Stages, Examples, Knowledge Base, and Voice Setup Checklist structure.
 
 ### The `Diagram-Skill-v2` Skill — How It Works
 
-Generates PDFs using Python (matplotlib) + ReportLab. Two diagrams per engagement:
+Generates PDFs using Python (matplotlib) + ReportLab. Each engagement should produce a diagram PDF and a standalone client-facing companion write-up PDF.
 
-| Diagram | Type | Size | What It Shows |
-|---------|------|------|---------------|
-| Call Flow | Decision Tree | 14×17 portrait | Every branch: AMD check → greeting → qualification → outcomes |
-| SOW Blueprint | Swim Lane | 17×11 landscape | System architecture: client team / AI platform / integrations |
+The companion write-up follows this structure:
+1. Title Page
+2. Context
+3. Executive Summary
+4. Current Situation
+5. Recommended Approach
+6. Diagram Walkthrough
+7. Summary Table
+8. Implementation Plan
+9. Investment & Returns, only when numbers were provided
+10. Next Steps
 
-Both diagrams come with a companion write-up PDF explaining the diagram to non-technical stakeholders.
-
+The default diagram type for Voice Agent OS packages is Swim Lane Blueprint. Use Decision Tree for routing or call-flow branching, Hub and Spoke for a central platform map, Before/After for current versus proposed, Linear Process for sequential flows, and Data Architecture for reporting or pipeline work.
 ---
 
 ## 7. File Naming Conventions
