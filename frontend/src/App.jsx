@@ -253,7 +253,9 @@ function PlatformApp({ user }) {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
-  const [promptOutput, setPromptOutput] = useState("");
+  const [buildOutput, setBuildOutput] = useState("");
+  const [docsOutput, setDocsOutput] = useState("");
+  const [elkOutput, setElkOutput] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -462,7 +464,7 @@ function PlatformApp({ user }) {
           <CommandCenter
             clients={clients}
             tasks={tasks}
-            promptOutput={promptOutput}
+            promptOutput={buildOutput || docsOutput || elkOutput}
             setActiveTab={setActiveTab}
           />
         )}
@@ -488,13 +490,13 @@ function PlatformApp({ user }) {
           />
         )}
         {activeTab === "buildStudio" && (
-          <NewPromptPage busy={busy} setBusy={setBusy} getToken={getToken} setStatus={setStatus} setPromptOutput={setPromptOutput} promptOutput={promptOutput} />
+          <NewPromptPage selectedClient={selectedClient} busy={busy} setBusy={setBusy} getToken={getToken} setStatus={setStatus} setPromptOutput={setBuildOutput} promptOutput={buildOutput} />
         )}
         {activeTab === "docs" && (
-          <DocsPage busy={busy} setBusy={setBusy} getToken={getToken} setStatus={setStatus} setPromptOutput={setPromptOutput} promptOutput={promptOutput} />
+          <DocsPage selectedClient={selectedClient} busy={busy} setBusy={setBusy} getToken={getToken} setStatus={setStatus} setPromptOutput={setDocsOutput} promptOutput={docsOutput} />
         )}
         {activeTab === "elkBuilder" && (
-          <OptimizePage busy={busy} setBusy={setBusy} getToken={getToken} setStatus={setStatus} setPromptOutput={setPromptOutput} promptOutput={promptOutput} />
+          <OptimizePage selectedClient={selectedClient} busy={busy} setBusy={setBusy} getToken={getToken} setStatus={setStatus} setPromptOutput={setElkOutput} promptOutput={elkOutput} />
         )}
         {activeTab === "profile" && (
           <ProfilePage user={user} isAdmin={isAdmin} getToken={getToken} setStatus={setStatus} />
@@ -1188,17 +1190,25 @@ function AgentPromptPage({ selectedClient, promptJobs, setPromptJobs, getToken, 
   );
 }
 
-function OptimizePage({ busy, setBusy, getToken, setStatus, promptOutput, setPromptOutput }) {
+function OptimizePage({ selectedClient, busy, setBusy, getToken, setStatus, promptOutput, setPromptOutput }) {
   const [form, setForm] = useState({
-    client: "",
+    client: selectedClient?.company || "Default workspace",
     previousPrompt: "",
     clientFeedback: "",
     optimizationTarget: "Improve overall quality",
     llmProvider: "OpenRouter",
     llmModel: "OpenRouter auto model",
     skillSelection: "Standard review",
-    autonomy: "AI-led"
+    autonomy: "AI-led",
+    attachments: []
   });
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      client: selectedClient?.company || "Default workspace"
+    }));
+  }, [selectedClient?.company]);
 
   async function optimizePrompt(event) {
     event.preventDefault();
@@ -1223,7 +1233,6 @@ function OptimizePage({ busy, setBusy, getToken, setStatus, promptOutput, setPro
       <Panel title="Prompt revision">
         <form className="form-stack" onSubmit={optimizePrompt}>
           <BrainPanel form={form} setForm={setForm} />
-          <TextInput label="Workspace" value={form.client} onChange={(client) => setForm({ ...form, client })} required />
           <label>
             Current prompt
             <textarea value={form.previousPrompt} onChange={(event) => setForm({ ...form, previousPrompt: event.target.value })} />
@@ -1232,19 +1241,20 @@ function OptimizePage({ busy, setBusy, getToken, setStatus, promptOutput, setPro
             Notes
             <textarea value={form.clientFeedback} onChange={(event) => setForm({ ...form, clientFeedback: event.target.value })} placeholder="Paste feedback, call notes, objections, or review notes here." />
           </label>
+          <SourceFilesInput value={form.attachments} onChange={(attachments) => setForm({ ...form, attachments })} />
           <SelectInput label="Revision goal" value={form.optimizationTarget} options={["Improve overall quality", "Shorter responses", "Clearer call flow", "Stronger guardrails", "Lower latency"]} onChange={(optimizationTarget) => setForm({ ...form, optimizationTarget })} />
           <button className="primary">{busy ? "Creating..." : "Create revision"}</button>
         </form>
       </Panel>
-      <PromptOutput job={promptOutput} />
+      <PromptOutput job={promptOutput} mode="elk" title="Elk builder output" />
       <PromptLifecyclePanel job={promptOutput} />
     </section>
   );
 }
 
-function NewPromptPage({ busy, setBusy, getToken, setStatus, promptOutput, setPromptOutput }) {
+function NewPromptPage({ selectedClient, busy, setBusy, getToken, setStatus, promptOutput, setPromptOutput }) {
   const [form, setForm] = useState({
-    client: "",
+    client: selectedClient?.company || "Default workspace",
     agentType: "Inbound",
     industry: "",
     voiceStyle: "Warm, concise, professional",
@@ -1256,8 +1266,18 @@ function NewPromptPage({ busy, setBusy, getToken, setStatus, promptOutput, setPr
     skillSelection: "Standard package",
     autonomy: "AI-led",
     platform: "Elk",
-    sourceBrief: ""
+    sourceBrief: "",
+    attachments: []
   });
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      client: selectedClient?.company || "Default workspace",
+      industry: current.industry || selectedClient?.industry || "",
+      platform: selectedClient?.platform || current.platform || "Elk"
+    }));
+  }, [selectedClient?.company, selectedClient?.industry, selectedClient?.platform]);
 
   async function generatePrompt(event) {
     event.preventDefault();
@@ -1284,7 +1304,6 @@ function NewPromptPage({ busy, setBusy, getToken, setStatus, promptOutput, setPr
           <div className="wide">
             <BrainPanel form={form} setForm={setForm} />
           </div>
-          <TextInput label="Workspace" value={form.client} onChange={(client) => setForm({ ...form, client })} required />
           <SelectInput label="Agent type" value={form.agentType} options={agentTypes} onChange={(agentType) => setForm({ ...form, agentType })} />
           <TextInput label="Industry" value={form.industry} onChange={(industry) => setForm({ ...form, industry })} />
           <SelectInput label="Platform" value={form.platform} options={platforms} onChange={(platform) => setForm({ ...form, platform })} />
@@ -1292,20 +1311,21 @@ function NewPromptPage({ busy, setBusy, getToken, setStatus, promptOutput, setPr
             Source notes
             <textarea value={form.sourceBrief} onChange={(event) => setForm({ ...form, sourceBrief: event.target.value })} />
           </label>
+          <div className="wide">
+            <SourceFilesInput value={form.attachments} onChange={(attachments) => setForm({ ...form, attachments })} />
+          </div>
           <button className="primary wide">{busy ? "Creating..." : "Create package"}</button>
         </form>
       </Panel>
-      <PromptOutput job={promptOutput} />
+      <PromptOutput job={promptOutput} mode="prompt" title="Prompt output" />
       <PromptLifecyclePanel job={promptOutput} />
     </section>
   );
 }
 
-function DocsPage({ busy, setBusy, getToken, setStatus, promptOutput, setPromptOutput }) {
+function DocsPage({ selectedClient, busy, setBusy, getToken, setStatus, promptOutput, setPromptOutput }) {
   const [form, setForm] = useState({
-    client: "",
-    agentType: "Inbound",
-    industry: "",
+    client: selectedClient?.company || "Default workspace",
     voiceStyle: "Warm, concise, professional",
     llmProvider: "OpenRouter",
     llmModel: "OpenRouter auto model",
@@ -1314,10 +1334,21 @@ function DocsPage({ busy, setBusy, getToken, setStatus, promptOutput, setPromptO
     reasoningMode: "Balanced",
     skillSelection: "Standard docs",
     autonomy: "Approval-led",
-    platform: "Elk",
-    sourceBrief: ""
+    platform: selectedClient?.platform || "Elk",
+    agentType: "Inbound",
+    sourceBrief: "",
+    attachments: []
   });
-  const [selectedDocs, setSelectedDocs] = useState(["Integration guide", "Call guide", "Call flow", "Script"]);
+  const docOptions = ["Blueprint", "Call script", "Call flow", "Integration blueprint"];
+  const [selectedDocs, setSelectedDocs] = useState(docOptions);
+
+  useEffect(() => {
+    setForm((current) => ({
+      ...current,
+      client: selectedClient?.company || "Default workspace",
+      platform: selectedClient?.platform || current.platform || "Elk"
+    }));
+  }, [selectedClient?.company, selectedClient?.platform]);
 
   async function generateDocs(event) {
     event.preventDefault();
@@ -1329,7 +1360,8 @@ function DocsPage({ busy, setBusy, getToken, setStatus, promptOutput, setPromptO
         method: "POST",
         body: JSON.stringify({
           ...form,
-          sourceBrief: `Requested docs: ${selectedDocs.join(", ")}\n\nSource notes:\n${form.sourceBrief}`
+          requestedDocs: selectedDocs,
+          sourceBrief: form.sourceBrief
         })
       });
       setPromptOutput(data.promptJob);
@@ -1344,13 +1376,9 @@ function DocsPage({ busy, setBusy, getToken, setStatus, promptOutput, setPromptO
     <section className="view-grid">
       <Panel title="Production docs">
         <form className="form-grid" onSubmit={generateDocs}>
-          <TextInput label="Workspace" value={form.client} onChange={(client) => setForm({ ...form, client })} required />
-          <SelectInput label="Platform" value={form.platform} options={platforms} onChange={(platform) => setForm({ ...form, platform })} />
-          <SelectInput label="Agent type" value={form.agentType} options={agentTypes} onChange={(agentType) => setForm({ ...form, agentType })} />
-          <TextInput label="Industry" value={form.industry} onChange={(industry) => setForm({ ...form, industry })} />
           <fieldset className="wide checkbox-group">
             <legend>Documents</legend>
-            {["Integration guide", "Call guide", "Call flow", "Script"].map((docName) => (
+            {docOptions.map((docName) => (
               <label className="checkbox-row" key={docName}>
                 <input
                   type="checkbox"
@@ -1371,10 +1399,13 @@ function DocsPage({ busy, setBusy, getToken, setStatus, promptOutput, setPromptO
             Source notes
             <textarea value={form.sourceBrief} onChange={(event) => setForm({ ...form, sourceBrief: event.target.value })} placeholder="Paste transcript, notes, or requirements here." required />
           </label>
+          <div className="wide">
+            <SourceFilesInput value={form.attachments} onChange={(attachments) => setForm({ ...form, attachments })} />
+          </div>
           <button className="primary wide">{busy ? "Creating docs..." : "Create docs"}</button>
         </form>
       </Panel>
-      <PromptOutput job={promptOutput} />
+      <PromptOutput job={promptOutput} mode="docs" title="Docs output" showPrompt={false} />
       <DiagramSkillPanel />
     </section>
   );
@@ -1398,6 +1429,122 @@ function DiagramSkillPanel() {
         )}
       />
     </Panel>
+  );
+}
+
+function isTextLikeFile(file) {
+  const name = String(file?.name || "").toLowerCase();
+  return (
+    String(file?.type || "").startsWith("text/") ||
+    ["application/json", "application/xml", "application/csv"].includes(file?.type) ||
+    /\.(txt|md|csv|json|xml|yaml|yml|log)$/i.test(name)
+  );
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Could not read file."));
+    reader.readAsText(file);
+  });
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Could not read file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("Could not read file."));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function extractPdfText(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer || []);
+  const raw = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+  const fragments = [];
+
+  for (const match of raw.matchAll(/\(([^()]{3,500})\)/g)) {
+    fragments.push(match[1]);
+  }
+
+  for (const match of raw.matchAll(/<([0-9A-Fa-f\s]{6,800})>/g)) {
+    const hex = match[1].replace(/\s+/g, "");
+    let text = "";
+    for (let index = 0; index < hex.length; index += 2) {
+      const code = Number.parseInt(hex.slice(index, index + 2), 16);
+      if (code >= 32 && code <= 126) text += String.fromCharCode(code);
+    }
+    if (text.trim().length > 2) fragments.push(text);
+  }
+
+  return fragments
+    .join(" ")
+    .replace(/\\[nrt]/g, " ")
+    .replace(/\\([()\\])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 12000);
+}
+
+async function readFilesAsAttachments(fileList) {
+  const files = Array.from(fileList || []).slice(0, 10);
+  const attachments = [];
+
+  for (const file of files) {
+    const attachment = {
+      name: file.name,
+      type: file.type || "application/octet-stream",
+      size: file.size
+    };
+
+    if (isTextLikeFile(file)) {
+      attachment.text = (await readFileAsText(file)).slice(0, 12000);
+    } else if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+      const buffer = await readFileAsArrayBuffer(file);
+      attachment.text = extractPdfText(buffer);
+      attachment.dataUrl = await readFileAsDataUrl(file);
+    } else if (String(file.type || "").startsWith("image/")) {
+      attachment.dataUrl = await readFileAsDataUrl(file);
+    } else {
+      attachment.dataUrl = await readFileAsDataUrl(file);
+    }
+
+    attachments.push(attachment);
+  }
+
+  return attachments;
+}
+
+function SourceFilesInput({ value = [], onChange }) {
+  const [fileStatus, setFileStatus] = useState("");
+
+  async function handleFiles(event) {
+    setFileStatus("Reading files...");
+    try {
+      const attachments = await readFilesAsAttachments(event.target.files);
+      onChange(attachments);
+      setFileStatus(attachments.length ? `${attachments.length} file${attachments.length === 1 ? "" : "s"} attached.` : "");
+    } catch {
+      setFileStatus("Could not read one of the files.");
+    }
+  }
+
+  return (
+    <label className="file-input">
+      Attach source files
+      <input type="file" multiple accept=".txt,.md,.csv,.json,.xml,.yaml,.yml,.pdf,.doc,.docx,image/*" onChange={handleFiles} />
+      <span>{fileStatus || (value.length ? `${value.length} file${value.length === 1 ? "" : "s"} attached.` : "Add docs, PDFs, images, or notes as source input.")}</span>
+    </label>
   );
 }
 
@@ -1428,21 +1575,373 @@ function Panel({ title, children }) {
   );
 }
 
-function PromptOutput({ job }) {
+function buildDownloadFilename(job, extension = "pdf") {
+  const client = typeof job === "object" ? job?.client : "";
+  const safeClient = String(client || "inspra-docs")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${safeClient || "inspra-docs"}-docs.${extension}`;
+}
+
+function buildDocsContent(job, artifactItems) {
+  const sections = [];
+
+  artifactItems
+    .filter((item) => item.value)
+    .forEach((item) => {
+      sections.push(`## ${item.title}\n\n${item.value}`);
+    });
+
+  return sections.join("\n\n");
+}
+
+function stripMarkdown(value) {
+  return String(value || "")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "")
+    .replace(/\|/g, "  ")
+    .replace(/`/g, "")
+    .replace(/\s+->\s+/g, " -> ")
+    .trim();
+}
+
+function escapePdfText(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E\n]/g, "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+}
+
+function wrapPdfLine(line, maxChars) {
+  const words = String(line || "").split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  });
+
+  if (current) lines.push(current);
+  return lines.length ? lines : [""];
+}
+
+function pdfColor(hex) {
+  const value = String(hex || "#000000").replace("#", "");
+  const r = Number.parseInt(value.slice(0, 2), 16) / 255;
+  const g = Number.parseInt(value.slice(2, 4), 16) / 255;
+  const b = Number.parseInt(value.slice(4, 6), 16) / 255;
+  return `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)}`;
+}
+
+function addPdfText(commands, text, x, y, size = 9, color = "#1A1A1A") {
+  commands.push(`${pdfColor(color)} rg`, "BT", `/F1 ${size} Tf`, `${x} ${y} Td`, `(${escapePdfText(text)}) Tj`, "ET");
+}
+
+function addPdfRect(commands, x, y, width, height, fill, stroke = "#DDDDDD", lineWidth = 1) {
+  commands.push(`${pdfColor(fill)} rg`, `${pdfColor(stroke)} RG`, `${lineWidth} w`, `${x} ${y} ${width} ${height} re B`);
+}
+
+function addPdfLine(commands, x1, y1, x2, y2, color = "#555555", lineWidth = 1) {
+  commands.push(`${pdfColor(color)} RG`, `${lineWidth} w`, `${x1} ${y1} m ${x2} ${y2} l S`);
+}
+
+function addWrappedPdfText(commands, text, x, y, maxChars, lineHeight, size, color) {
+  wrapPdfLine(text, maxChars).slice(0, 3).forEach((line, index) => {
+    addPdfText(commands, line, x, y - index * lineHeight, size, color);
+  });
+}
+
+function drawSystemBox(commands, box) {
+  addPdfRect(commands, box.x, box.y, box.w, box.h, box.fill, box.stroke, 1.1);
+  addWrappedPdfText(commands, box.title, box.x + 8, box.y + box.h - 15, 18, 10, 8.4, "#1A1A1A");
+  if (box.subtitle) {
+    addWrappedPdfText(commands, box.subtitle, box.x + 8, box.y + 14, 21, 8, 6.7, "#777777");
+  }
+}
+
+function drawSwimlaneDiagram(commands, title) {
+  const pageWidth = 842;
+  const brand = "#39E100";
+  const brandDark = "#1A3A00";
+  const rowX = 34;
+  const rowW = pageWidth - 68;
+  const labelW = 82;
+  const rowH = 74;
+  const rows = [
+    {
+      label: "CURRENT STATE",
+      y: 380,
+      fill: "#EEF2FF",
+      stroke: "#7090CC",
+      boxes: [
+        ["Source Notes", "Approved client inputs", "#F0F0F0", "#888888"],
+        ["Existing Systems", "CRM / calendar / forms", "#E8F0FE", "#4A6FA5"],
+        ["Human Handoff", "Manual review path", "#E8F0FE", "#4A6FA5"]
+      ]
+    },
+    {
+      label: "PROPOSED PHASE 1",
+      y: 275,
+      fill: "#EDFCE5",
+      stroke: brand,
+      boxes: [
+        ["AI Voice Agent", "Short approved answers", "#E8FAE0", brand],
+        ["Tool Router", "Booking / callback action", "#F3EEFF", "#7B2FBE"],
+        ["CRM Writeback", "Notes and outcomes", "#E8F0FE", "#4A6FA5"],
+        ["Specialist", "Final fit and next step", "#F0F0F0", "#888888"]
+      ]
+    },
+    {
+      label: "MONITORED OPERATION",
+      y: 170,
+      fill: "#FFF8EE",
+      stroke: "#E07000",
+      boxes: [
+        ["QA Evidence", "Scenario validation", "#FFF3E0", "#E07000"],
+        ["Workflow Logs", "Success / failure checks", "#F3EEFF", "#7B2FBE"],
+        ["Obsidian Learning", "Reusable release notes", "#E8FAE0", brand]
+      ]
+    }
+  ];
+
+  addPdfText(commands, "INSPRA AI", 36, 548, 15, brandDark);
+  addPdfText(commands, title, 265, 550, 14, "#1A1A1A");
+  addPdfText(commands, "Swim Lane Blueprint | Diagram-Skill-v2 aligned | v1", 300, 532, 8.5, "#777777");
+  addPdfLine(commands, 34, 515, 808, 515, "#DDDDDD", 0.8);
+
+  const legend = [
+    ["Existing System", "#E8F0FE", "#4A6FA5"],
+    ["New / Central Hub", "#F3EEFF", "#7B2FBE"],
+    ["Inspra AI System", "#E8FAE0", brand],
+    ["Future / TBC", "#FFF3E0", "#E07000"],
+    ["Neutral / Endpoint", "#F0F0F0", "#888888"]
+  ];
+  legend.forEach(([label, fill, stroke], index) => {
+    const x = 78 + index * 145;
+    addPdfRect(commands, x, 493, 18, 11, fill, stroke, 1);
+    addPdfText(commands, label, x + 25, 495, 7.2, "#444444");
+  });
+
+  rows.forEach((row) => {
+    addPdfRect(commands, rowX, row.y, rowW, rowH, row.fill, row.stroke, 1.3);
+    addPdfRect(commands, rowX + 12, row.y + 17, labelW, 40, row.fill, row.stroke, 1.1);
+    addWrappedPdfText(commands, row.label, rowX + 20, row.y + 41, 12, 10, 7.2, row.stroke);
+
+    const laneX = rowX + labelW + 44;
+    const laneW = rowW - labelW - 78;
+    const boxW = row.boxes.length > 3 ? 112 : 128;
+    const boxH = 42;
+    const gap = (laneW - row.boxes.length * boxW) / Math.max(1, row.boxes.length - 1);
+    const boxY = row.y + 16;
+    const placed = row.boxes.map((box, index) => ({
+      x: laneX + index * (boxW + gap),
+      y: boxY,
+      w: boxW,
+      h: boxH,
+      title: box[0],
+      subtitle: box[1],
+      fill: box[2],
+      stroke: box[3]
+    }));
+
+    placed.forEach((box, index) => {
+      drawSystemBox(commands, box);
+      if (index < placed.length - 1) {
+        const startX = box.x + box.w + 6;
+        const endX = placed[index + 1].x - 6;
+        const y = box.y + box.h / 2;
+        addPdfLine(commands, startX, y, endX, y, "#555555", 1);
+        addPdfText(commands, ">", endX - 3, y - 3, 8, "#555555");
+      }
+    });
+  });
+
+  addPdfText(commands, "Open Questions", 44, 128, 9, "#1A1A1A");
+  [
+    "Confirm system of record and field ownership.",
+    "Confirm booking/callback success and failure behavior.",
+    "Confirm approval owner before production release."
+  ].forEach((question, index) => {
+    const x = 44 + index * 250;
+    addPdfRect(commands, x, 92, 22, 22, "#FF6B00", "#FF6B00", 1);
+    addPdfText(commands, String(index + 1), x + 8, 99, 8, "#FFFFFF");
+    addWrappedPdfText(commands, question, x + 30, 107, 31, 10, 7.4, "#444444");
+  });
+
+  addPdfLine(commands, 34, 52, 808, 52, "#DDDDDD", 0.8);
+  addPdfText(commands, "Inspra AI", 44, 34, 7.5, "#777777");
+  addPdfText(commands, "Confidential client blueprint", 362, 34, 7.5, "#777777");
+}
+
+function createDiagramPdf(title, artifactItems) {
+  const pageWidth = 842;
+  const pageHeight = 595;
+  const margin = 48;
+  const sections = artifactItems.filter((item) => item.value);
+  const pages = [
+    {
+      title,
+      subtitle: "Client-facing documentation package",
+      body: [
+        "This PDF is prepared as a readable blueprint and write-up, not as source code.",
+        "Each selected document is separated into its own section for review and sharing."
+      ],
+      visual: "cover"
+    },
+    {
+      title: `${title} - Swim Lane Blueprint`,
+      subtitle: "Diagram-Skill-v2 aligned blueprint",
+      body: [],
+      visual: "swimlane"
+    },
+    ...sections.map((item) => ({
+      title: item.title,
+      subtitle: item.diagram ? "Diagram-oriented workflow" : "Production document",
+      body: stripMarkdown(item.value)
+        .split(/\r?\n/)
+        .flatMap((line) => wrapPdfLine(line.trim(), 78))
+        .filter(Boolean)
+        .slice(0, 42),
+      visual: item.diagram ? "flow" : "writeup"
+    }))
+  ];
+
+  const objects = [];
+  const addObject = (body) => {
+    objects.push(body);
+    return objects.length;
+  };
+
+  const catalogId = addObject("<< /Type /Catalog /Pages 2 0 R >>");
+  const pagesId = addObject("");
+  const fontId = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  const pageRefs = [];
+
+  pages.forEach((page, pageIndex) => {
+    const commands = [`${pdfColor("#FFFFFF")} rg`, `0 0 ${pageWidth} ${pageHeight} re f`];
+
+    if (page.visual === "swimlane") {
+      drawSwimlaneDiagram(commands, page.title);
+    } else {
+      addPdfRect(commands, margin, pageHeight - 94, pageWidth - margin * 2, 54, "#F7FBF8", "#1A3A00", 1.4);
+      addPdfText(commands, "INSPRA AI", margin + 18, pageHeight - 64, 13, "#1A3A00");
+      addPdfText(commands, page.title, margin + 150, pageHeight - 64, 16, "#1A1A1A");
+      addPdfText(commands, page.subtitle, margin + 150, pageHeight - 82, 9, "#777777");
+      addPdfRect(commands, margin, pageHeight - 160, pageWidth - margin * 2, 42, "#EDFCE5", "#39E100", 1);
+      addPdfText(commands, page.visual === "cover" ? "Document Package" : "Companion Write-up", margin + 16, pageHeight - 135, 11, "#1A3A00");
+
+      const startY = pageHeight - 195;
+      page.body.forEach((line, index) => {
+        addPdfText(commands, line, margin, startY - index * 13, 9, "#1A1A1A");
+      });
+    }
+    addPdfText(commands, `${pageIndex + 1} of ${pages.length}`, pageWidth - margin - 34, 30, 8, "#777777");
+    const stream = commands.join("\n");
+    const contentId = addObject(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    pageRefs.push(`${pageId} 0 R`);
+  });
+
+  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageRefs.join(" ")}] /Count ${pageRefs.length} >>`;
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  return pdf;
+}
+
+function downloadDocsPdf(job, artifactItems) {
+  if (!buildDocsContent(job, artifactItems)) return;
+
+  const title = `${typeof job === "object" && job?.client ? job.client : "Inspra"} Documentation Package`;
+  const pdf = createDiagramPdf(title, artifactItems);
+  const blob = new Blob([pdf], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = buildDownloadFilename(job, "pdf");
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function getArtifactItems(job, mode) {
+  const docs = [
+    { title: "Blueprint", value: job?.blueprint, diagram: true },
+    { title: "Call script", value: job?.callScript || job?.salesScript },
+    { title: "Call flow", value: job?.callFlowChart, diagram: true },
+    { title: "Integration blueprint", value: job?.integrationBlueprint || job?.integrationFlowchart, diagram: true }
+  ];
+  const elk = [
+    { title: "Agent description", value: job?.elkDescription },
+    { title: "Schema", value: job?.elkSchema },
+    { title: "Request body", value: job?.elkPostBody },
+    { title: "Function notes", value: job?.elkFunctionConfig }
+  ];
+
+  if (mode === "docs") return docs;
+  if (mode === "elk") return elk;
+  return docs;
+}
+
+function PromptOutput({ job, showPrompt = true, mode = "prompt", title = "Package output" }) {
   const output = typeof job === "string" ? job : job?.output;
+  const [copyStatus, setCopyStatus] = useState("");
+  const artifactItems = getArtifactItems(job, mode);
+  const canDownload = Boolean(buildDocsContent(job, artifactItems));
+  const showCopy = mode !== "docs";
+  const showDownload = mode === "docs";
+
+  async function copyGeneratedPrompt() {
+    if (!output) return;
+    try {
+      await navigator.clipboard.writeText(output);
+      setCopyStatus("Copied.");
+    } catch {
+      setCopyStatus("Copy failed.");
+    }
+  }
+
   return (
-    <Panel title="Package output">
-      <pre className="prompt-output">{output || "Your generated package will appear here."}</pre>
+    <Panel title={title}>
+      <div className="output-actions">
+        {showCopy && <button type="button" onClick={copyGeneratedPrompt} disabled={!output}>
+          Copy prompt
+        </button>}
+        {showDownload && <button type="button" onClick={() => downloadDocsPdf(job, artifactItems)} disabled={!canDownload}>
+          Download docs PDF
+        </button>}
+        {copyStatus && <span>{copyStatus}</span>}
+      </div>
+      {showPrompt && <pre className="prompt-output">{output || "Your generated package will appear here."}</pre>}
+      {!showPrompt && !canDownload && <pre className="prompt-output">Your generated documents will appear here.</pre>}
       {job && typeof job === "object" && (
         <div className="artifact-grid">
-          <Artifact title="Blueprint" value={job.blueprint} />
-          <Artifact title="Call script" value={job.callScript || job.salesScript} />
-          <Artifact title="Call flow" value={job.callFlowChart} />
-          <Artifact title="Integration guide" value={job.integrationBlueprint || job.integrationFlowchart} />
-          <Artifact title="Agent description" value={job.elkDescription} />
-          <Artifact title="Schema" value={job.elkSchema} />
-          <Artifact title="Request body" value={job.elkPostBody} />
-          <Artifact title="Function notes" value={job.elkFunctionConfig} />
+          {artifactItems.map((item) => (
+            <Artifact key={item.title} title={item.title} value={item.value} />
+          ))}
         </div>
       )}
     </Panel>

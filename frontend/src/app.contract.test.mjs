@@ -107,10 +107,57 @@ test("agent type controls are constrained to Inbound and Outbound", () => {
 
 test("Docs page asks which document type to generate", () => {
   assert.match(appSource, /Documents/);
-  assert.match(appSource, /Integration guide/);
-  assert.match(appSource, /Call guide/);
+  assert.match(appSource, /Integration blueprint/);
+  assert.match(appSource, /Call script/);
   assert.match(appSource, /Call flow/);
-  assert.match(appSource, /Script/);
+  assert.match(appSource, /Blueprint/);
+  assert.match(appSource, /requestedDocs: selectedDocs/);
+  assert.match(appSource, /<PromptOutput job=\{promptOutput\} mode="docs" title="Docs output" showPrompt=\{false\}/);
+  const docsBlock = appSource.match(/function DocsPage[\s\S]*?function DiagramSkillPanel/)?.[0] || "";
+  assert.doesNotMatch(docsBlock, /SelectInput label="Platform"/);
+  assert.doesNotMatch(docsBlock, /SelectInput label="Agent type"/);
+  assert.doesNotMatch(docsBlock, /TextInput label="Industry"/);
+});
+
+test("generated prompt can be copied and docs download as one PDF", () => {
+  assert.match(appSource, /Copy prompt/);
+  assert.match(appSource, /Download docs PDF/);
+  assert.match(appSource, /function downloadDocsPdf/);
+  assert.match(appSource, /function createDiagramPdf/);
+  assert.match(appSource, /function drawSwimlaneDiagram/);
+  assert.match(appSource, /Diagram-Skill-v2 aligned/);
+  assert.match(appSource, /INSPRA AI/);
+  assert.match(appSource, /#39E100/);
+  assert.match(appSource, /application\/pdf/);
+  assert.match(appSource, /URL\.createObjectURL/);
+  assert.match(appSource, /download = buildDownloadFilename\(job, "pdf"\)/);
+  assert.doesNotMatch(appSource, /text\/markdown/);
+  assert.doesNotMatch(appSource, /const labels = \["Input", "Agent", "Decision", "Handoff"\]/);
+});
+
+test("generation surfaces keep separate output state and accept attachments", () => {
+  assert.match(appSource, /const \[buildOutput, setBuildOutput\] = useState\(""\)/);
+  assert.match(appSource, /const \[docsOutput, setDocsOutput\] = useState\(""\)/);
+  assert.match(appSource, /const \[elkOutput, setElkOutput\] = useState\(""\)/);
+  assert.doesNotMatch(appSource, /const \[promptOutput, setPromptOutput\] = useState\(""\)/);
+  assert.match(appSource, /function SourceFilesInput/);
+  assert.match(appSource, /type="file" multiple/);
+  assert.match(appSource, /readFilesAsAttachments/);
+  assert.match(appSource, /function extractPdfText/);
+});
+
+test("build tools use the selected workspace without asking for a workspace name", () => {
+  assert.match(appSource, /<NewPromptPage selectedClient=\{selectedClient\}/);
+  assert.match(appSource, /<DocsPage selectedClient=\{selectedClient\}/);
+  assert.match(appSource, /<OptimizePage selectedClient=\{selectedClient\}/);
+
+  const buildStudioBlock = appSource.match(/function NewPromptPage[\s\S]*?function DocsPage/)?.[0] || "";
+  const docsBlock = appSource.match(/function DocsPage[\s\S]*?function DiagramSkillPanel/)?.[0] || "";
+  const elkBuilderBlock = appSource.match(/function OptimizePage[\s\S]*?function NewPromptPage/)?.[0] || "";
+
+  assert.doesNotMatch(buildStudioBlock, /TextInput label="Workspace"/);
+  assert.doesNotMatch(docsBlock, /TextInput label="Workspace"/);
+  assert.doesNotMatch(elkBuilderBlock, /TextInput label="Workspace"/);
 });
 
 test("production validation exposes QA testing action", () => {

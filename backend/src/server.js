@@ -8,7 +8,7 @@ import { isSupabaseReady, isAdminConfigured } from "./supabaseClient.js";
 import { acceptInvite, createInvite, listInvites } from "./invites.js";
 import { listMembers, setMemberRole } from "./team.js";
 import { isEmailConfigured } from "./email.js";
-import { buildPromptPackage, classifyWorkItem } from "./promptPackage.js";
+import { buildPromptPackageWithOpenRouter, classifyWorkItem } from "./promptPackage.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -23,7 +23,7 @@ function normalisePlatform(value) {
 }
 
 app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173", credentials: true }));
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "15mb" }));
 app.use(morgan("dev"));
 
 app.get("/api/health", (_req, res) => {
@@ -32,6 +32,7 @@ app.get("/api/health", (_req, res) => {
     supabaseReady: isSupabaseReady(),
     adminReady: isAdminConfigured(),
     emailReady: isEmailConfigured(),
+    openRouterReady: Boolean(process.env.OPENROUTER_API_KEY?.trim()),
     obsidianFlowReady: Boolean(process.env.OBSIDIAN_VAULT_PATH || process.env.OBSIDIAN_NOTES_PATH)
   });
 });
@@ -215,7 +216,6 @@ app.post("/api/agent-prompts", requireAuth, async (req, res, next) => {
       llmProvider: "Manual",
       llmModel: "Manual prompt",
       output: prompt,
-      agentPrompt: prompt,
       sourceBrief: "Manual agent prompt version"
     });
 
@@ -227,7 +227,7 @@ app.post("/api/agent-prompts", requireAuth, async (req, res, next) => {
 
 app.post("/api/prompts/generate", requireAuth, async (req, res, next) => {
   try {
-    const packageOutput = buildPromptPackage(req.body, "create");
+    const packageOutput = await buildPromptPackageWithOpenRouter(req.body, "create");
     const promptJob = await createUserDoc(req.supabase, req.user.uid, "promptJobs", {
       type: "new",
       client: req.body.client || "Selected client",
@@ -243,7 +243,7 @@ app.post("/api/prompts/generate", requireAuth, async (req, res, next) => {
       ...packageOutput
     });
 
-    res.status(201).json({ promptJob });
+    res.status(201).json({ promptJob: { ...promptJob, ...packageOutput } });
   } catch (error) {
     next(error);
   }
@@ -251,7 +251,7 @@ app.post("/api/prompts/generate", requireAuth, async (req, res, next) => {
 
 app.post("/api/prompts/optimize", requireAuth, async (req, res, next) => {
   try {
-    const packageOutput = buildPromptPackage(req.body, "enhance");
+    const packageOutput = await buildPromptPackageWithOpenRouter(req.body, "enhance");
     const promptJob = await createUserDoc(req.supabase, req.user.uid, "promptJobs", {
       type: "optimize",
       client: req.body.client || "Selected client",
@@ -268,7 +268,7 @@ app.post("/api/prompts/optimize", requireAuth, async (req, res, next) => {
       ...packageOutput
     });
 
-    res.status(201).json({ promptJob });
+    res.status(201).json({ promptJob: { ...promptJob, ...packageOutput } });
   } catch (error) {
     next(error);
   }

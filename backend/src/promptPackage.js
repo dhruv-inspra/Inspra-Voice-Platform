@@ -79,39 +79,32 @@ export function buildPromptPackage(body, mode) {
   const llmModel = normaliseLlmModel(body.llmModel);
   const skillSelection = body.skillSelection || "AI picks skills";
   const autonomy = body.autonomy || "AI-led";
-  const sourceBrief = body.sourceBrief || "No discovery brief supplied yet.";
+  const attachmentSource = buildAttachmentSource(body.attachments);
+  const sourceBrief = [body.sourceBrief || "No discovery brief supplied yet.", attachmentSource].filter(Boolean).join("\n\n");
   const previousPrompt = body.previousPrompt || "No previous prompt supplied.";
-  const clientFeedback = body.clientFeedback || "No client feedback supplied yet.";
+  const clientFeedback = [body.clientFeedback || "No client feedback supplied yet.", attachmentSource].filter(Boolean).join("\n\n");
   const optimizationTarget = body.optimizationTarget || "AI selects issues";
   const triage = classifyWorkItem(`${sourceBrief} ${previousPrompt} ${clientFeedback} ${optimizationTarget}`);
 
-  const contextSource =
+  const sourceProfile =
     mode === "enhance"
-      ? `Existing prompt:\n${previousPrompt}\n\nClient feedback:\n${clientFeedback}\n\nOptimization target: ${optimizationTarget}`
-      : `Discovery brief:\n${sourceBrief}`;
+      ? buildSourceProfile(`${previousPrompt}\n\n${clientFeedback}\n\n${optimizationTarget}`, client)
+      : buildSourceProfile(sourceBrief, client);
 
   const output = buildElkPrompt({
     client,
-    platform,
     agentType,
     voiceStyle,
-    llmProvider,
-    llmModel,
-    skillSelection,
-    autonomy,
-    contextSource,
-    temperature: body.temperature || "0.4",
-    maxTokens: body.maxTokens || "4000",
-    reasoningMode: body.reasoningMode || "Balanced"
+    sourceProfile
   });
 
-  const blueprint = buildBlueprint({ client, platform, agentType, sourceBrief, triage });
-  const callScript = buildCallScript({ client, agentType, voiceStyle });
-  const callFlowChart = buildCallFlowChart({ platform });
-  const integrationBlueprint = buildIntegrationBlueprint({ client, platform });
+  const blueprint = buildBlueprint({ client, platform, agentType, sourceBrief: sourceProfile.summary, triage, sourceProfile });
+  const callScript = buildCallScript({ client, agentType, voiceStyle, sourceProfile });
+  const callFlowChart = buildCallFlowChart({ platform, sourceProfile });
+  const integrationBlueprint = buildIntegrationBlueprint({ client, platform, sourceProfile });
   const elkExport = buildElkExport({ client, platform, agentType, output });
 
-  return {
+  const packageOutput = {
     output,
     blueprint,
     callScript,
@@ -141,56 +134,329 @@ export function buildPromptPackage(body, mode) {
       verificationResult: "Add verified lesson after QA or release review."
     })
   };
+
+  return filterRequestedDocs(packageOutput, body.requestedDocs);
+}
+
+export async function buildPromptPackageWithOpenRouter(body, mode, options = {}) {
+  const packageOutput = buildPromptPackage(body, mode);
+  const apiKey = resolveOpenRouterApiKey(options.apiKey);
+
+  if (!apiKey) {
+    throw new Error("OPENROUTER_API_KEY is required for LLM generation.");
+  }
+
+  try {
+    const generatedPrompt = await generatePromptWithOpenRouter({
+      body,
+      mode,
+      draftPrompt: packageOutput.output,
+      apiKey,
+      fetchImpl: options.fetchImpl || fetch
+    });
+    const generatedDocs = await generateDocsWithOpenRouter({
+      body,
+      mode,
+      packageOutput,
+      apiKey,
+      fetchImpl: options.fetchImpl || fetch
+    });
+    const platform = normalisePlatform(body.platform);
+    const agentType = normaliseAgentType(body.agentType);
+    const client = body.client || "the selected client";
+    const elkExport = buildElkExport({ client, platform, agentType, output: generatedPrompt });
+
+    return {
+      ...packageOutput,
+      ...generatedDocs,
+      output: generatedPrompt,
+      agentPrompt: generatedPrompt,
+      elkDescription: elkExport.descriptionTxt,
+      elkSchema: elkExport.openaiSchemaJson,
+      elkPostBody: elkExport.postBodyJson,
+      elkFunctionConfig: elkExport.functionConfigMd,
+      elkExport,
+      generationProvider: "openrouter",
+      generationModel: resolveOpenRouterModel(body.llmModel)
+    };
+  } catch (error) {
+    return {
+      ...packageOutput,
+      generationProvider: "local-template",
+      generationNote: `OpenRouter generation failed, so the local production template was used. ${error.message}`
+    };
+  }
+}
+
+function resolveOpenRouterApiKey(value) {
+  const candidate = value ?? process.env.OPENROUTER_API_KEY;
+  return String(candidate || "").trim();
+}
+
+function filterRequestedDocs(packageOutput, requestedDocs) {
+  if (!Array.isArray(requestedDocs) || requestedDocs.length === 0) return packageOutput;
+
+  const selected = new Set(requestedDocs.map(normaliseDocName));
+  const next = { ...packageOutput, requestedDocs };
+
+  if (!selected.has("Blueprint")) {
+    next.blueprint = "";
+  }
+  if (!selected.has("Call script")) {
+    next.callScript = "";
+    next.salesScript = "";
+  }
+  if (!selected.has("Call flow")) {
+    next.callFlowChart = "";
+  }
+  if (!selected.has("Integration blueprint")) {
+    next.integrationBlueprint = "";
+    next.integrationFlowchart = "";
+  }
+  if (!selected.has("Elk builder")) {
+    next.elkDescription = "";
+    next.elkSchema = "";
+    next.elkPostBody = "";
+    next.elkFunctionConfig = "";
+  }
+
+  return next;
+}
+
+function normaliseDocName(value) {
+  const name = String(value || "").trim().toLowerCase();
+  if (name === "script" || name === "call guide") return "Call script";
+  if (name === "integration guide") return "Integration blueprint";
+  if (name === "elk builder") return "Elk builder";
+  if (name === "call flow") return "Call flow";
+  if (name === "blueprint") return "Blueprint";
+  return value;
+}
+
+function buildAttachmentSource(attachments = []) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return "";
+  const lines = ["Attached source files:"];
+
+  attachments.slice(0, 10).forEach((file, index) => {
+    const name = String(file?.name || `Attachment ${index + 1}`).slice(0, 120);
+    const type = String(file?.type || "unknown");
+    const size = Number(file?.size || 0);
+    lines.push(`- ${name} (${type}, ${size} bytes)`);
+    if (file?.text) {
+      lines.push(String(file.text).slice(0, 12000));
+    } else if (file?.dataUrl && type.startsWith("image/")) {
+      lines.push("Image attachment supplied for model review.");
+    } else {
+      lines.push("Binary attachment supplied. Use the filename and any extracted text provided by the browser.");
+    }
+  });
+
+  return lines.join("\n");
+}
+
+async function generatePromptWithOpenRouter({ body, mode, draftPrompt, apiKey, fetchImpl }) {
+  const model = resolveOpenRouterModel(body.llmModel);
+  const attachmentSource = buildAttachmentSource(body.attachments);
+  const userContent = buildOpenRouterUserContent({
+    text: `Rewrite and improve this ${mode === "enhance" ? "revised" : "new"} voice-agent prompt so it is production-ready, concise, and aligned with the approved business facts already distilled inside it.\n\nRules:\n- Preserve tool names and required tool-call sequencing exactly.\n- Preserve all variables exactly, including {{CURRENT_DATE_TIME}}, {{firstName}}, and {{customer_phone}}.\n- Preserve all hard safety rules.\n- Make product answers specific to the approved product knowledge.\n- Do not invent new facts, pricing, legal claims, integrations, or guarantees.\n- Do not mention source material, transcripts, recordings, OpenRouter, Elk, model settings, or internal tools.\n\n${attachmentSource ? `Additional attached source material to consider without quoting raw metadata:\n${attachmentSource}\n\n` : ""}Draft prompt:\n${draftPrompt}`,
+    attachments: body.attachments
+  });
+  const response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": process.env.PUBLIC_APP_URL || process.env.CLIENT_URL || "http://localhost:5173",
+      "X-OpenRouter-Title": "Inspra AI Voice Platform"
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You create production-ready AI voice assistant prompts. Return only the final prompt markdown. Do not include analysis, explanations, raw transcript excerpts, meeting metadata, platform names, model names, or internal implementation notes."
+        },
+        {
+          role: "user",
+          content: userContent
+        }
+      ],
+      temperature: Number(body.temperature || 0.4),
+      max_tokens: Number(body.maxTokens || 4000)
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`HTTP ${response.status}: ${text.slice(0, 240)}`);
+  }
+
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content || typeof content !== "string") {
+    throw new Error("OpenRouter returned no message content.");
+  }
+
+  return content.trim();
+}
+
+async function generateDocsWithOpenRouter({ body, mode, packageOutput, apiKey, fetchImpl }) {
+  const requestedDocs = Array.isArray(body.requestedDocs) ? body.requestedDocs.map(normaliseDocName) : [];
+  if (!requestedDocs.length) return {};
+
+  const model = resolveOpenRouterModel(body.llmModel);
+  const docsBrief = [
+    `Client: ${body.client || "Selected client"}`,
+    `Mode: ${mode}`,
+    `Requested documents: ${requestedDocs.join(", ")}`,
+    "",
+    "Source notes:",
+    body.sourceBrief || "",
+    "",
+    "Draft artifacts:",
+    packageOutput.blueprint,
+    packageOutput.callScript,
+    packageOutput.callFlowChart,
+    packageOutput.integrationBlueprint
+  ].join("\n");
+
+  const response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": process.env.PUBLIC_APP_URL || process.env.CLIENT_URL || "http://localhost:5173",
+      "X-OpenRouter-Title": "Inspra AI Voice Platform"
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You create client-facing AI voice-agent documentation using the Diagram-Skill-v2 delivery standard. Return strict JSON only with keys blueprint, callScript, callFlowChart, integrationBlueprint. Use plain business language. Do not output Python, matplotlib code, code fences, implementation code, raw transcript excerpts, recording metadata, or internal model/platform settings."
+        },
+        {
+          role: "user",
+          content: buildOpenRouterUserContent({
+            text: `${docsBrief}\n\nDiagram-Skill-v2 rules:\n- Brand is Inspra AI.\n- Use the swim lane blueprint as the default diagram type unless the source clearly requires another type.\n- The blueprint must follow this client-facing companion write-up structure exactly: Title Page, Context, Executive Summary, Current Situation, Recommended Approach, Diagram Walkthrough, Summary Table, Implementation Plan, Next Steps.\n- The Diagram Walkthrough must describe three aligned swim lanes: Current State, Proposed Phase 1, and Monitored Operation.\n- Include system/component names, roles, data movement, ownership, open questions, and next steps.\n- Call flow should be a readable decision/process flow in business language, not source code.\n- Integration blueprint should describe systems, data movement, ownership, handoffs, failure handling, and open questions.\n- Call script should be production-ready voice copy.\n- Never include Python, Mermaid, pseudo-code, code fences, or raw transcript lines.\n- Leave non-requested keys as empty strings.`,
+            attachments: body.attachments
+          })
+        }
+      ],
+      temperature: Number(body.temperature || 0.4),
+      max_tokens: Number(body.maxTokens || 4000)
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Docs HTTP ${response.status}: ${text.slice(0, 240)}`);
+  }
+
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content || typeof content !== "string") {
+    throw new Error("OpenRouter returned no docs content.");
+  }
+
+  const docs = parseJsonObject(content);
+  return filterRequestedDocs(
+    {
+      blueprint: String(docs.blueprint || packageOutput.blueprint || ""),
+      callScript: String(docs.callScript || packageOutput.callScript || ""),
+      salesScript: String(docs.callScript || packageOutput.salesScript || ""),
+      callFlowChart: String(docs.callFlowChart || packageOutput.callFlowChart || ""),
+      integrationBlueprint: String(docs.integrationBlueprint || packageOutput.integrationBlueprint || ""),
+      integrationFlowchart: String(docs.integrationBlueprint || packageOutput.integrationFlowchart || "")
+    },
+    requestedDocs
+  );
+}
+
+function parseJsonObject(content) {
+  const trimmed = content.trim().replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const match = trimmed.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]);
+    throw new Error("OpenRouter docs response was not valid JSON.");
+  }
+}
+
+function buildOpenRouterUserContent({ text, attachments = [] }) {
+  const imageAttachments = Array.isArray(attachments)
+    ? attachments.filter((file) => file?.dataUrl && String(file.type || "").startsWith("image/")).slice(0, 4)
+    : [];
+
+  if (!imageAttachments.length) return text;
+
+  return [
+    { type: "text", text },
+    ...imageAttachments.map((file) => ({
+      type: "image_url",
+      image_url: { url: file.dataUrl }
+    }))
+  ];
+}
+
+function resolveOpenRouterModel(value) {
+  const model = normaliseLlmModel(value);
+  return model === "OpenRouter auto model" ? "~openai/gpt-latest" : model;
 }
 
 function buildElkPrompt({
   client,
-  platform,
   agentType,
   voiceStyle,
-  llmProvider,
-  llmModel,
-  skillSelection,
-  autonomy,
-  contextSource,
-  temperature,
-  maxTokens,
-  reasoningMode
+  sourceProfile
 }) {
   const company = client || "the client";
+  const displayName = sourceProfile.companyName || company;
   const roleLabel = agentType === "Outbound" ? "outbound AI voice assistant" : "inbound AI voice assistant";
   const goal =
     agentType === "Outbound"
-      ? "create interest in a short no-obligation call, callback, or demo with a human specialist"
-      : "answer approved questions, qualify the caller, and route the caller to the right booking, callback, or handoff";
+      ? `warm qualified leads, answer approved questions, and encourage a booked call with ${sourceProfile.specialistName}`
+      : `help eligible callers understand ${displayName}, answer approved questions, and encourage a booked call with ${sourceProfile.specialistName}`;
   const opening =
     agentType === "Outbound"
-      ? `Hi, I'm an AI assistant calling on behalf of ${company}. Are you open to a quick chat about whether this is relevant for your team?`
-      : `Hi, I'm an AI assistant with ${company}. How can I help today?`;
+      ? `Hi, I'm an AI assistant calling on behalf of ${displayName}. Is now an okay time for a quick question?`
+      : `Hi, I'm an AI assistant with ${displayName}. How can I help today?`;
+  const productBullets = sourceProfile.productFacts.map((item) => `- ${item}`).join("\n");
+  const useCases = sourceProfile.useCases.map((item) => `- ${item}`).join("\n");
+  const qualifiers = sourceProfile.qualifiers.map((item) => `- ${item}`).join("\n");
+  const disqualifiers = sourceProfile.disqualifiers.map((item) => `- ${item}`).join("\n");
+  const handoffFacts = sourceProfile.handoffFacts.map((item) => `- ${item}`).join("\n");
+  const discoveryQuestions = sourceProfile.discoveryQuestions.map((item) => `"${item}"`).join("\n\n");
 
   return `## Role
 
-You are an ${roleLabel} calling on behalf of ${company}.
+You are an ${roleLabel} for ${displayName}.
 
 Your goal is to ${goal}.
 
-Always say you are an AI assistant. You represent only ${company}.
-
-Platform: ${platform}
-LLM provider: ${llmProvider}
-LLM model: ${llmModel}
-Skill routing: ${skillSelection}
-Autonomy: ${autonomy}
-Temperature: ${temperature}
-Max tokens: ${maxTokens}
-Reasoning mode: ${reasoningMode}
+Always say you are an AI assistant. You represent only ${displayName}.
 
 Current date and time: {{CURRENT_DATE_TIME}}
 Prospect Name: {{firstName}}
 Customer Phone: {{customer_phone}}
 
-Source material:
-${contextSource}
+Approved product knowledge:
+${productBullets}
+
+Approved use cases:
+${useCases}
+
+Initial fit signals:
+${qualifiers}
+
+Do not progress as a likely fit when:
+${disqualifiers}
+
+Human handoff facts:
+${handoffFacts}
 
 ---
 
@@ -213,17 +479,17 @@ Do not collect email.
 
 Before \`demo_book\`, say exactly:
 
-"Perfect. I'll pass that through to the ${company} team now."
+"Perfect. I'll pass that through to the ${displayName} team now."
 
 Do not say the meeting is booked or confirmed.
 
 If \`demo_book\` succeeds, immediately call \`end_call\` with:
 
-"Thanks for your time. The ${company} team will be in touch. Have a good one."
+"Thanks for your time. The ${displayName} team will be in touch. Have a good one."
 
 If \`demo_book\` fails, say:
 
-"Sorry, I couldn't pass that through just now. A specialist from ${company} can still follow up with you directly."
+"Sorry, I couldn't pass that through just now. A specialist from ${displayName} can still follow up with you directly."
 
 Then call \`end_call\` with:
 
@@ -233,7 +499,7 @@ Use \`end_call\` when the call is complete, the prospect declines, asks not to b
 
 Ending messages:
 
-- Demo/callback: "Thanks for your time. The ${company} team will be in touch. Have a good one."
+- Demo/callback: "Thanks for your time. The ${displayName} team will be in touch. Have a good one."
 - Not interested: "No problem. Thanks for your time. Have a good day."
 - Opt-out: "Understood. I'll mark that straight away. Thanks for your time."
 - General: "Thanks for your time. Have a good day."
@@ -285,15 +551,15 @@ Keep the call short. Aim for three to six minutes.
 
 ## Product Summary
 
-Use the approved source material as the product or service summary.
+Use only the approved product knowledge, use cases, fit signals, and handoff facts above.
 
 Keep explanations short.
 
-If asked for more detail, summarise only the most relevant approved capability from the source material.
+If asked for more detail, summarise only the most relevant approved capability from the approved knowledge above.
 
 Do not guarantee results.
 
-Say "designed to help with" or "can support" unless the source material explicitly proves a stronger claim.
+Say "designed to help with" or "can support" unless the approved knowledge above proves a stronger claim.
 
 Do not overstate features as guaranteed if the prospect asks about exact configuration, custom integrations, legal compliance, pricing, implementation detail, or timelines.
 
@@ -309,7 +575,7 @@ Do not immediately say:
 
 Do not immediately say:
 
-"A specialist from ${company} can cover that properly."
+"A specialist from ${displayName} can cover that properly."
 
 Use the specific answer that matches their question.
 
@@ -317,7 +583,7 @@ Use the specific answer that matches their question.
 
 If asked what happens next, say:
 
-"The ${company} team can follow up directly and confirm the best next step for your situation."
+"The ${displayName} team can follow up directly and confirm the best next step for your situation."
 
 Then ask:
 
@@ -327,7 +593,7 @@ Then ask:
 
 If asked about service, support, workflow, automation, or operations, say:
 
-"${company} is designed to help make that workflow easier to manage and easier to track."
+"${sourceProfile.serviceAnswer}"
 
 Then ask:
 
@@ -341,7 +607,7 @@ If asked about exact pricing, legal terms, technical implementation, or guarante
 
 Then add:
 
-"A specialist from ${company} can confirm the exact fit for your setup."
+"A specialist from ${displayName} can confirm the exact fit for your situation."
 
 ---
 
@@ -353,7 +619,7 @@ Start exactly:
 
 If no or busy:
 
-"No problem. Would it suit better if a specialist from ${company} called you at a better time?"
+"No problem. Would it suit better if a specialist from ${displayName} called you at a better time?"
 
 If yes, collect name, phone, date, and time, then use \`demo_book\`.
 
@@ -365,15 +631,15 @@ If they say yes or engage, go straight to Main Pitch.
 
 ## Main Pitch
 
-Lead with the pain point or value hook from the source material.
+Lead with the most relevant need from the approved use cases.
 
 Pain point hook:
 
-"Are you currently handling that in one clear process, or is it spread across a few different tools?"
+"${sourceProfile.painHook}"
 
 Value hook:
 
-"The main value is making the workflow easier to track, easier to hand off, and easier to improve over time."
+"${sourceProfile.valueHook}"
 
 Then ask:
 
@@ -387,11 +653,7 @@ Ask maximum two discovery questions total.
 
 Choose only the most useful one or two:
 
-"What is the main thing you are trying to improve right now?"
-
-"Is this handled in one system today, or across a few different tools?"
-
-"Is there one area that is causing the most friction?"
+${discoveryQuestions}
 
 Do not keep questioning.
 
@@ -405,15 +667,15 @@ If they ask a product question during discovery, answer it directly before movin
 
 If they already have a system:
 
-"Okay, good. The question is usually whether it connects the full workflow clearly."
+"${sourceProfile.alreadyHasSystemResponse}"
 
 If they are using manual workarounds:
 
-"Yeah, that is common. Manual work can be fine early on, but it gets harder as volume grows."
+"${sourceProfile.manualWorkaroundResponse}"
 
 If they mention a specific pain point:
 
-"Right, that is exactly the kind of area ${company} is designed to help with."
+"${sourceProfile.painPointResponse}"
 
 If they challenge relevance:
 
@@ -427,7 +689,7 @@ Do not add more unless asked.
 
 After one or two discovery answers, or after answering a specific product question, say:
 
-"Based on that, it may be worth a quick chat with a specialist from ${company}."
+"Based on that, it may be worth a quick chat with ${sourceProfile.specialistName}."
 
 Then ask:
 
@@ -465,7 +727,7 @@ If they agree, ask one at a time:
 
 Then say:
 
-"Perfect. I'll pass that through to the ${company} team now."
+"Perfect. I'll pass that through to the ${displayName} team now."
 
 Then call \`demo_book\`.
 
@@ -517,7 +779,7 @@ If no or unclear, ask:
 
 If "busy":
 
-"Totally understand. Would a callback from a specialist from ${company} suit better?"
+"Totally understand. Would a callback from a specialist from ${displayName} suit better?"
 
 If yes, collect name, phone, date, time, then use \`demo_book\`.
 
@@ -531,7 +793,7 @@ Then collect name, phone, date, time, then use \`demo_book\`.
 
 If "I don't talk to AI":
 
-"Fair enough. I can have a real person from ${company} call you instead. Would that work?"
+"Fair enough. I can have ${sourceProfile.specialistName} or the team call you instead. Would that work?"
 
 If yes, collect name, phone, date, time, then use \`demo_book\`.
 
@@ -571,7 +833,7 @@ Say:
 
 Then answer the specific question briefly using the Product Detail Answers.
 
-If they ask whether ${company} definitely does something, do not guarantee beyond the source material.
+If they ask whether ${displayName} definitely does something, do not guarantee beyond the approved product knowledge.
 
 Say:
 
@@ -587,11 +849,11 @@ Then ask:
 
 If receptionist or gatekeeper answers:
 
-"Hi, I'm an AI assistant calling on behalf of ${company}. How are you today?"
+"Hi, I'm an AI assistant calling on behalf of ${displayName}. How are you today?"
 
 Then say:
 
-"I am calling about whether ${company} can help with the team's workflow or customer handling."
+"I am calling about a lending enquiry and whether a call with ${sourceProfile.specialistName} would be useful."
 
 Ask:
 
@@ -619,7 +881,7 @@ If you genuinely cannot answer, say:
 
 Then add:
 
-"A specialist from ${company} can cover that properly."
+"A specialist from ${displayName} can cover that properly."
 
 Then ask:
 
@@ -641,7 +903,7 @@ Do not repeat your previous response.
 
 If they are still silent after that, say:
 
-"No worries, I'll let the ${company} team follow up if needed. Have a good day."
+"No worries, I'll let the ${displayName} team follow up if needed. Have a good day."
 
 Then call \`end_call\` with general ending.
 
@@ -653,7 +915,7 @@ Then call \`end_call\` with general ending.
 
 Prospect: "What do you actually help with?"
 
-Assistant: "${company} is designed to help make the workflow easier to manage and easier to track."
+Assistant: "${displayName} may help homeowners access property equity when standard serviceability does not fit."
 
 Prospect: "I don't want a specialist unless I know it is worth my time."
 
@@ -689,7 +951,7 @@ Never collect payment, bank, password, ID, or sensitive personal details.
 
 Never say the meeting is booked.
 
-Never mention Inspra or Elk.
+Never mention internal tools, platform names, model names, meeting recordings, transcripts, or source notes.
 
 Never overpromise.
 
@@ -745,39 +1007,195 @@ ${verificationResult || "Add the verification result before this note becomes re
 Apply this lesson only when the client, platform, function category, and approval policy match the original evidence.`;
 }
 
-function buildBlueprint({ client, platform, agentType, sourceBrief, triage }) {
+function buildSourceProfile(sourceText = "", fallbackClient = "the client") {
+  const source = String(sourceText || "");
+  const cleanSource = sanitiseSourceMaterial(source);
+  const lower = cleanSource.toLowerCase();
+  const companyName = inferCompanyName(cleanSource, fallbackClient);
+  const specialistName = lower.includes("amanda") ? "Amanda" : "a specialist";
+  const isMortgageLender =
+    /mortgage|home loan|equity|serviceability|regulated lender|reverse mortgage/i.test(cleanSource);
+
+  if (isMortgageLender) {
+    return {
+      companyName,
+      specialistName,
+      summary:
+        `${companyName} is a regulated lender that helps eligible homeowners access cash secured by a first or second mortgage. ` +
+        "The product is for people who have property equity but may not meet standard bank serviceability rules.",
+      productFacts: [
+        `${companyName} provides loans secured by a first or second mortgage, with most enquiries relating to second mortgages.`,
+        "The product is designed for homeowners with equity who want to convert some of that equity into cash.",
+        "Common reasons include school fees, renovations, business funding, or other major funding needs.",
+        "Interest is added to the loan rather than paid as a normal monthly repayment.",
+        `${companyName} may share in the property's capital growth when the loan is repaid.`,
+        "Repayment is event-driven, such as sale of the home or voluntary repayment, rather than a fixed standard loan term.",
+        `${companyName} is a regulated lender, so exact suitability and pricing must be confirmed by the human team.`
+      ],
+      useCases: [
+        "The caller has checked eligibility and wants to understand whether the product could fit.",
+        "The caller has been declined by a bank or expects standard serviceability to be difficult.",
+        "The caller wants to understand how no monthly repayments can work.",
+        "The caller needs enough confidence to book a short call with Amanda."
+      ],
+      qualifiers: [
+        "They own a house, apartment, or investment property.",
+        "They have available equity in the property.",
+        "They can provide the property value, current mortgage position, requested amount, and postcode if asked.",
+        "They are open to a 20-minute Calendly call with Amanda."
+      ],
+      disqualifiers: [
+        "They need unsecured lending, a boat loan, or funding not connected to property equity.",
+        "They mention bankruptcy, serious hardship, leasehold title, company or trust ownership, or a high-rise apartment over the usual policy range.",
+        "They ask for final credit approval, legal advice, guaranteed eligibility, or exact pricing on the call."
+      ],
+      handoffFacts: [
+        "The assistant should not replace Amanda or give final credit advice.",
+        "The best outcome is to warm the caller and encourage a call with Amanda.",
+        "Calls are usually 20-minute Calendly bookings and are often completed in about 15 minutes.",
+        "If a caller wants a human, offer a callback or booked call rather than continuing to push the AI conversation.",
+        "Post-call notes should support CRM follow-up, but the voice prompt should not mention transcripts unless asked internally."
+      ],
+      serviceAnswer: `${companyName} helps homeowners access equity when a standard lender may not fit their circumstances.`,
+      painHook: "Are you looking at this because a bank loan is not quite working for what you need?",
+      valueHook: `The main value is that ${companyName} may help convert property equity into funds without monthly repayments.`,
+      discoveryQuestions: [
+        "What are you hoping to use the funds for?",
+        "Have you already checked your eligibility on the website?",
+        "Is the property a house, apartment, or investment property?"
+      ],
+      alreadyHasSystemResponse: `Okay, good. If you have checked eligibility, the best next step is usually a short call with ${specialistName}.`,
+      manualWorkaroundResponse: `Yeah, that is common. Many people look at ${companyName} after a bank loan does not fit their serviceability position.`,
+      painPointResponse: `Right, that is exactly the kind of situation ${companyName} may be able to look at.`
+    };
+  }
+
+  return {
+    companyName,
+    specialistName,
+    summary: cleanSource || `${companyName} needs a concise production voice prompt based on approved source notes.`,
+    productFacts: buildFallbackBullets(cleanSource, companyName, "product"),
+    useCases: buildFallbackBullets(cleanSource, companyName, "use case"),
+    qualifiers: [
+      "The caller has a relevant need.",
+      "The caller is open to a short specialist conversation.",
+      "The caller can share a name, phone number, preferred date, and preferred time for follow-up."
+    ],
+    disqualifiers: [
+      "The caller asks for exact pricing, legal advice, guaranteed outcomes, or technical commitments.",
+      "The caller opts out or asks not to be contacted."
+    ],
+    handoffFacts: [
+      "Answer briefly from approved knowledge first.",
+      "When fit is likely, offer a specialist callback.",
+      "Do not collect email or sensitive personal details."
+    ],
+    serviceAnswer: `${companyName} can support the approved service area described in the source notes.`,
+    painHook: "Is this something you are actively looking into right now?",
+    valueHook: `The main value is helping you understand whether ${companyName} is relevant before a specialist follow-up.`,
+    discoveryQuestions: [
+      "What is the main thing you are trying to improve right now?",
+      "Is there one area that is causing the most friction?"
+    ],
+    alreadyHasSystemResponse: "Okay, good. The question is usually whether the current approach covers the full need clearly.",
+    manualWorkaroundResponse: "Yeah, that is common. Manual work can be fine early on, but it gets harder as volume grows.",
+    painPointResponse: `Right, that is the kind of area ${companyName} may be able to discuss with you.`
+  };
+}
+
+function sanitiseSourceMaterial(source) {
+  return String(source || "")
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      if (/^\d{1,2}:\d{2}\s*-/.test(trimmed)) return false;
+      if (/view recording|no highlights|impromptu zoom|transcript|fathom/i.test(trimmed)) return false;
+      if (/^(amanda|anthony|phil|tarique|dhruv|vishalli)\b/i.test(trimmed)) return false;
+      return true;
+    })
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function inferCompanyName(source, fallbackClient) {
+  const fallback = fallbackClient && fallbackClient !== "Default workspace" ? fallbackClient : "the company";
+  const midkeyMatch = source.match(/\bMidkey\b/i);
+  if (midkeyMatch) return "Midkey";
+  const automateMatch = source.match(/\bAutomate\s*K\b/i);
+  if (automateMatch) return "Automate K";
+  return fallback;
+}
+
+function buildFallbackBullets(cleanSource, companyName, label) {
+  const sentences = cleanSource
+    .split(/(?<=[.!?])\s+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 30 && item.length < 220)
+    .slice(0, 5);
+
+  if (sentences.length) return sentences;
+
+  return [
+    `${companyName} needs the assistant to answer only from approved business information.`,
+    `If the caller asks beyond the approved ${label} information, the assistant should offer a specialist follow-up.`
+  ];
+}
+
+function buildBlueprint({ client, platform, agentType, sourceBrief, triage, sourceProfile }) {
   return `# ${client} x Inspra AI Production Blueprint
 
-## Scope
-Build a ${agentType} on ${platform} using the supplied discovery material.
+## Title Page
+Document title: ${client} AI Voice Agent Blueprint
+Client: ${client}
+Prepared by: Inspra AI
+Version: v1
+
+## Context
+${sourceProfile?.summary || sourceBrief}
+
+## Executive Summary
+Build a ${agentType} voice agent that answers only from approved source material, keeps the conversation concise, and routes qualified callers to the right next step.
 
 ## Swimlane Blueprint
-Current State -> Fathom notes, existing CRM/calendar, existing handoff process.
+Current State -> approved discovery notes, existing CRM/calendar, existing handoff process.
 Production Build -> ${platform} agent, Inspra prompt package, call script, call flow, integration blueprint, Diagram Skill Package.
 Monitored Operation -> Platform events, workflow logs, CRM/calendar writeback, release evidence, Obsidian learning.
 
-## Diagram Skill Package
-Use the Diagram Skill deliverable shape for client-facing docs:
-- Title Page
-- Context
-- Executive Summary
-- Current Situation
-- Recommended Approach
-- Diagram Walkthrough
-- Summary Table
-- Implementation Plan
-- Investment & Returns if numbers are supplied
-- Next Steps
+## Current Situation
+${sourceBrief}
+
+## Recommended Approach
+Use a voice-first assistant that gives short approved answers, asks no more than two discovery questions, and moves to booking or callback only when the caller shows fit.
 
 Recommended diagram type: Swim Lane Blueprint unless the source material clearly requires a decision tree, hub and spoke, before/after, linear process, or data architecture diagram.
 
-## Source Material
-${sourceBrief}
+## Diagram Walkthrough
+Current State -> Production Build -> Monitored Operation.
+
+## Summary Table
+| Component | Role | Impact |
+|---|---|---|
+| Voice agent | First response and qualification | Faster caller handling |
+| Human specialist | Final fit, pricing, and exact next step | Keeps regulated or nuanced decisions human-led |
+| CRM/calendar workflow | Record, callback, and booking handoff | Clear operational follow-through |
+
+## Implementation Plan
+1. Confirm approved knowledge and disqualifiers.
+2. Build and test prompt, tools, and handoff behavior.
+3. Validate CRM/calendar writeback and failure handling.
+4. Run scenario QA before production.
 
 ## Open Questions
 - Confirm source of truth for client records.
 - Confirm approval owner for prompt, function, workflow, and release changes.
 - Confirm monitoring cadence and escalation path.
+
+## Next Steps
+- Review this blueprint against the source material.
+- Confirm missing integration details.
+- Approve the prompt and tool behavior before launch.
 
 ## Triage Rule
 Default bucket: ${triage.bucket}. Safe fix: ${triage.safeToFix ? "yes" : "no"}. Approval required: ${triage.approvalRequired ? "yes" : "no"}.`;

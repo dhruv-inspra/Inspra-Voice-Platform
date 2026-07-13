@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildPromptPackage,
+  buildPromptPackageWithOpenRouter,
   buildObsidianLearningNote,
   classifyWorkItem
 } from "./promptPackage.js";
@@ -80,7 +81,7 @@ test("buildPromptPackage uses Elk prompt structure and variable names", () => {
   assert.match(result.output, /`preferred_callback_time`/);
   assert.match(result.output, /Do not collect email\./);
   assert.match(result.output, /"Perfect\. I'll pass that through to the NextGen Innovations team now\."/);
-  assert.match(result.output, /Never mention Inspra or Elk\./);
+  assert.match(result.output, /Never mention internal tools, platform names, model names, meeting recordings, transcripts, or source notes\./);
 
   const schema = JSON.parse(result.elkExport.openaiSchemaJson);
   assert.deepEqual(schema.required, [
@@ -121,9 +122,6 @@ test("buildPromptPackage defaults to Elk and OpenRouter model routing", () => {
     "create"
   );
 
-  assert.match(result.output, /Platform: Elk/);
-  assert.match(result.output, /LLM provider: OpenRouter/);
-  assert.match(result.output, /LLM model: OpenRouter auto model/);
   assert.match(result.deploymentPackage, /Production package ready for Elk/);
   assert.match(result.deploymentPackage, /OpenRouter \/ OpenRouter auto model/);
 });
@@ -146,10 +144,10 @@ test("buildPromptPackage keeps Retell and Vapi as spare platform options", () =>
     "create"
   );
 
-  assert.match(retellResult.output, /Platform: Retell/);
-  assert.match(vapiResult.output, /Platform: Vapi/);
-  assert.match(retellResult.output, /LLM provider: OpenRouter/);
-  assert.match(vapiResult.output, /LLM provider: OpenRouter/);
+  assert.doesNotMatch(retellResult.output, /Platform: Retell/);
+  assert.doesNotMatch(vapiResult.output, /Platform: Vapi/);
+  assert.doesNotMatch(retellResult.output, /LLM provider: OpenRouter/);
+  assert.doesNotMatch(vapiResult.output, /LLM provider: OpenRouter/);
 });
 
 test("buildPromptPackage normalizes unsupported platforms and agent types", () => {
@@ -164,10 +162,36 @@ test("buildPromptPackage normalizes unsupported platforms and agent types", () =
     "create"
   );
 
-  assert.match(result.output, /You are an inbound AI voice assistant calling on behalf of Acme Dental\./);
-  assert.match(result.output, /Platform: Elk/);
-  assert.match(result.output, /LLM provider: OpenRouter/);
-  assert.match(result.output, /LLM model: OpenRouter auto model/);
+  assert.match(result.output, /You are an inbound AI voice assistant for Acme Dental\./);
+  assert.doesNotMatch(result.output, /Platform: Elk/);
+  assert.doesNotMatch(result.output, /LLM provider: OpenRouter/);
+  assert.doesNotMatch(result.output, /LLM model: OpenRouter auto model/);
+});
+
+test("buildPromptPackage distills mortgage discovery into a production-ready prompt", () => {
+  const result = buildPromptPackage(
+    {
+      client: "Test",
+      agentType: "Inbound",
+      sourceBrief: `Impromptu Zoom Meeting - June 30
+VIEW RECORDING - 32 mins (No highlights):
+0:00 - Amanda
+  We provide loans that are secured by either a first or a second mortgage. Most of our loans are second mortgages.
+  If a customer cannot meet serviceability hurdles of the major banks, they can convert equity into cash.
+  The interest is added to the loan, so the customer is not required to use salary or business income for monthly repayments.
+  We get a share of the capital growth when they repay us.
+  The objective is to get them to book a call with Amanda. We don't want the agent to replace Amanda.
+  Calls are done via Calendly and usually allow 20 minutes.`
+    },
+    "create"
+  );
+
+  assert.match(result.output, /Approved product knowledge/);
+  assert.match(result.output, /secured by a first or second mortgage/i);
+  assert.match(result.output, /no monthly repayments|monthly repayment/i);
+  assert.match(result.output, /Amanda/);
+  assert.doesNotMatch(result.output, /VIEW RECORDING|Impromptu Zoom|0:00 - Amanda|Source material/);
+  assert.doesNotMatch(result.output, /Platform:|LLM provider|Temperature|Max tokens|Reasoning mode/);
 });
 
 test("buildPromptPackage includes functional QA testing artifacts", () => {
@@ -183,6 +207,171 @@ test("buildPromptPackage includes functional QA testing artifacts", () => {
   assert.match(result.qaChecklist, /Functional QA testing/);
   assert.match(result.qaGates, /Inbound and outbound scenario tests/);
   assert.match(result.testReport, /functional QA testing/i);
+});
+
+test("buildPromptPackage returns only requested docs when selected", () => {
+  const result = buildPromptPackage(
+    {
+      client: "Midkey",
+      sourceBrief: "Equity lending product for homeowners.",
+      requestedDocs: ["Script", "Call flow"]
+    },
+    "create"
+  );
+
+  assert.equal(result.blueprint, "");
+  assert.match(result.callScript, /Midkey Call Script/);
+  assert.match(result.callFlowChart, /Greeting -> Intent/);
+  assert.equal(result.integrationBlueprint, "");
+  assert.equal(result.elkSchema, "");
+});
+
+test("buildPromptPackageWithOpenRouter uses OpenRouter when configured", async () => {
+  const calls = [];
+  const result = await buildPromptPackageWithOpenRouter(
+    {
+      client: "Midkey",
+      llmModel: "openai/gpt-4.1-mini",
+      sourceBrief: "Loans secured by property equity."
+    },
+    "create",
+    {
+      apiKey: "test-key",
+      fetchImpl: async (url, options) => {
+        calls.push({ url, options });
+        return {
+          ok: true,
+          async json() {
+            return {
+              choices: [{ message: { content: "## Role\n\nOpenRouter production prompt." } }]
+            };
+          }
+        };
+      }
+    }
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://openrouter.ai/api/v1/chat/completions");
+  assert.match(calls[0].options.headers.Authorization, /Bearer test-key/);
+  assert.equal(JSON.parse(calls[0].options.body).model, "openai/gpt-4.1-mini");
+  assert.equal(result.output, "## Role\n\nOpenRouter production prompt.");
+  assert.equal(result.generationProvider, "openrouter");
+});
+
+test("buildPromptPackageWithOpenRouter generates requested docs through OpenRouter", async () => {
+  const calls = [];
+  const result = await buildPromptPackageWithOpenRouter(
+    {
+      client: "Midkey",
+      llmModel: "openai/gpt-4.1-mini",
+      sourceBrief: "Loans secured by property equity.",
+      requestedDocs: ["Blueprint", "Call flow"],
+      attachments: [
+        {
+          name: "brief.md",
+          type: "text/markdown",
+          size: 44,
+          text: "Amanda handles human calls after eligibility."
+        }
+      ]
+    },
+    "create",
+    {
+      apiKey: "test-key",
+      fetchImpl: async (url, options) => {
+        calls.push({ url, options });
+        if (calls.length === 1) {
+          return {
+            ok: true,
+            async json() {
+              return {
+                choices: [{ message: { content: "## Role\n\nOpenRouter production prompt." } }]
+              };
+            }
+          };
+        }
+
+        return {
+          ok: true,
+          async json() {
+            return {
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      blueprint: "# Client Blueprint\n\nLLM generated blueprint.",
+                      callScript: "",
+                      callFlowChart: "Input -> Agent -> Handoff",
+                      integrationBlueprint: ""
+                    })
+                  }
+                }
+              ]
+            };
+          }
+        };
+      }
+    }
+  );
+
+  assert.equal(calls.length, 2);
+  const firstPayload = JSON.parse(calls[0].options.body);
+  const secondPayload = JSON.parse(calls[1].options.body);
+  assert.match(JSON.stringify(firstPayload.messages), /brief\.md/);
+  assert.match(JSON.stringify(secondPayload.messages), /Requested documents: Blueprint, Call flow/);
+  assert.match(JSON.stringify(secondPayload.messages), /Diagram-Skill-v2 rules/);
+  assert.match(JSON.stringify(secondPayload.messages), /Brand is Inspra AI/);
+  assert.match(JSON.stringify(secondPayload.messages), /Current State, Proposed Phase 1, and Monitored Operation/);
+  assert.match(result.blueprint, /LLM generated blueprint/);
+  assert.match(result.callFlowChart, /Input -> Agent -> Handoff/);
+  assert.equal(result.callScript, "");
+  assert.equal(result.integrationBlueprint, "");
+  assert.equal(result.generationProvider, "openrouter");
+});
+
+test("buildPromptPackageWithOpenRouter requires an API key before generation", async () => {
+  await assert.rejects(
+    () =>
+      buildPromptPackageWithOpenRouter(
+        {
+          client: "Midkey",
+          sourceBrief: "Loans secured by property equity."
+        },
+        "create",
+        { apiKey: "" }
+      ),
+    /OPENROUTER_API_KEY is required/
+  );
+});
+
+test("buildPromptPackageWithOpenRouter falls back only after an OpenRouter API error", async () => {
+  let attempted = false;
+  const result = await buildPromptPackageWithOpenRouter(
+    {
+      client: "Midkey",
+      sourceBrief: "Loans secured by property equity."
+    },
+    "create",
+    {
+      apiKey: "test-key",
+      fetchImpl: async () => {
+        attempted = true;
+        return {
+          ok: false,
+          status: 503,
+          async text() {
+            return "provider unavailable";
+          }
+        };
+      }
+    }
+  );
+
+  assert.equal(attempted, true);
+  assert.equal(result.generationProvider, "local-template");
+  assert.match(result.generationNote, /OpenRouter generation failed/);
+  assert.match(result.output, /Approved product knowledge/);
 });
 
 test("classifyWorkItem separates approval changes from safe operational fixes", () => {

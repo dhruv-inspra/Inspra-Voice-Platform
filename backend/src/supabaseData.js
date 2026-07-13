@@ -45,25 +45,7 @@ const collectionConfig = {
       previousPrompt: "previous_prompt",
       clientFeedback: "client_feedback",
       optimizationTarget: "optimization_target",
-      output: "output",
-      blueprint: "blueprint",
-      callScript: "sales_script",
-      salesScript: "sales_script",
-      callFlowChart: "call_flow_chart",
-      agentPrompt: "agent_prompt",
-      integrationBlueprint: "integration_flowchart",
-      integrationFlowchart: "integration_flowchart",
-      elkDescription: "elk_description",
-      elkSchema: "elk_schema",
-      elkPostBody: "elk_post_body",
-      elkFunctionConfig: "elk_function_config",
-      qaChecklist: "qa_checklist",
-      qaGates: "qa_gates",
-      testReport: "test_report",
-      latencyNotes: "latency_notes",
-      deploymentPackage: "deployment_package",
-      releasePolicy: "release_policy",
-      obsidianLearning: "obsidian_learning"
+      output: "output"
     }
   }
 };

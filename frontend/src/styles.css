@@ -804,6 +804,27 @@ textarea {
   padding: 0 6px;
 }
 
+.file-input {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.file-input input {
+  margin-top: 8px;
+  padding: 8px;
+}
+
+.file-input span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .pill-row {
   display: flex;
   flex-wrap: wrap;
@@ -842,6 +863,18 @@ textarea {
   display: grid;
   gap: 10px;
   margin-top: 12px;
+}
+
+.output-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.output-actions button {
+  min-width: 132px;
 }
 
 .artifact {

@@ -49,22 +49,6 @@ create table if not exists public.prompt_jobs (
   client_feedback text not null default '',
   optimization_target text not null default 'AI selects issues',
   output text not null default '',
-  blueprint text not null default '',
-  sales_script text not null default '',
-  call_flow_chart text not null default '',
-  agent_prompt text not null default '',
-  integration_flowchart text not null default '',
-  elk_description text not null default '',
-  elk_schema text not null default '',
-  elk_post_body text not null default '',
-  elk_function_config text not null default '',
-  qa_checklist text not null default '',
-  qa_gates text not null default '',
-  test_report text not null default '',
-  latency_notes text not null default '',
-  deployment_package text not null default '',
-  release_policy text not null default '',
-  obsidian_learning text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -80,19 +64,6 @@ alter table public.tasks add column if not exists proposed_fix text not null def
 alter table public.tasks add column if not exists applied_fix text not null default '';
 alter table public.tasks add column if not exists verification_result text not null default '';
 alter table public.tasks add column if not exists rollback_details text not null default '';
-
-alter table public.prompt_jobs add column if not exists blueprint text not null default '';
-alter table public.prompt_jobs add column if not exists sales_script text not null default '';
-alter table public.prompt_jobs add column if not exists call_flow_chart text not null default '';
-alter table public.prompt_jobs add column if not exists agent_prompt text not null default '';
-alter table public.prompt_jobs add column if not exists integration_flowchart text not null default '';
-alter table public.prompt_jobs add column if not exists elk_description text not null default '';
-alter table public.prompt_jobs add column if not exists elk_schema text not null default '';
-alter table public.prompt_jobs add column if not exists elk_post_body text not null default '';
-alter table public.prompt_jobs add column if not exists elk_function_config text not null default '';
-alter table public.prompt_jobs add column if not exists qa_gates text not null default '';
-alter table public.prompt_jobs add column if not exists release_policy text not null default '';
-alter table public.prompt_jobs add column if not exists obsidian_learning text not null default '';
 
 create index if not exists clients_user_updated_idx on public.clients(user_id, updated_at desc);
 create index if not exists tasks_user_updated_idx on public.tasks(user_id, updated_at desc);
