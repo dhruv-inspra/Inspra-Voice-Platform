@@ -24,7 +24,7 @@ test("buildPromptPackage creates the required Voice Agent OS artifacts", () => {
   assert.match(result.blueprint, /Acme Dental/);
   assert.match(result.callScript, /Opening/);
   assert.match(result.salesScript, /Opening/);
-  assert.match(result.callFlowChart, /Greeting -> Intent/);
+  assert.match(result.callFlowChart, /Routing Branches/);
   assert.match(result.integrationBlueprint, /Elk/);
   assert.match(result.integrationFlowchart, /Elk/);
   assert.match(result.elkExport.descriptionTxt, /Inbound/);
@@ -92,7 +92,7 @@ test("buildPromptPackage uses Elk prompt structure and variable names", () => {
   ]);
 });
 
-test("buildPromptPackage aligns docs with Obsidian and Diagram Skill deliverables", () => {
+test("buildPromptPackage creates client-facing docs without internal generation notes", () => {
   const result = buildPromptPackage(
     {
       client: "Acme Dental",
@@ -102,12 +102,23 @@ test("buildPromptPackage aligns docs with Obsidian and Diagram Skill deliverable
     "create"
   );
 
-  assert.match(result.blueprint, /Diagram Skill Package/);
   assert.match(result.blueprint, /Title Page/);
   assert.match(result.blueprint, /Diagram Walkthrough/);
   assert.match(result.blueprint, /Next Steps/);
-  assert.match(result.integrationBlueprint, /Obsidian Flow/);
-  assert.match(result.integrationBlueprint, /YAML properties/);
+  assert.match(result.callScript, /Production Call Script/);
+  assert.match(result.callScript, /Opening Script/);
+  assert.match(result.callScript, /Script Guardrails/);
+  assert.doesNotMatch(result.callScript, /Production Flow|Data Movement/);
+  assert.match(result.callFlowChart, /Call Flow and Routing Logic/);
+  assert.match(result.callFlowChart, /Routing Branches/);
+  assert.match(result.callFlowChart, /QA Scenarios/);
+  assert.doesNotMatch(result.callFlowChart, /Opening Script|Data Movement/);
+  assert.match(result.integrationBlueprint, /Production Flow/);
+  assert.match(result.integrationBlueprint, /Data Movement/);
+  assert.match(result.integrationBlueprint, /Failure Handling/);
+  assert.doesNotMatch(result.integrationBlueprint, /Opening Script|Production Call Script/);
+  assert.doesNotMatch(result.blueprint, /Diagram Skill|Diagram-Skill|Obsidian|YAML|LLM|model|source code/i);
+  assert.doesNotMatch(result.integrationBlueprint, /Diagram Skill|Diagram-Skill|Obsidian|YAML|LLM|model|source code/i);
   assert.match(result.obsidianLearning, /source_artifact: "prompt_package"/);
   assert.match(result.obsidianLearning, /diagram_skill_aligned: true/);
 });
@@ -220,8 +231,8 @@ test("buildPromptPackage returns only requested docs when selected", () => {
   );
 
   assert.equal(result.blueprint, "");
-  assert.match(result.callScript, /Midkey Call Script/);
-  assert.match(result.callFlowChart, /Greeting -> Intent/);
+  assert.match(result.callScript, /Midkey Production Call Script/);
+  assert.match(result.callFlowChart, /Routing Branches/);
   assert.equal(result.integrationBlueprint, "");
   assert.equal(result.elkSchema, "");
 });
@@ -320,9 +331,10 @@ test("buildPromptPackageWithOpenRouter generates requested docs through OpenRout
   const secondPayload = JSON.parse(calls[1].options.body);
   assert.match(JSON.stringify(firstPayload.messages), /brief\.md/);
   assert.match(JSON.stringify(secondPayload.messages), /Requested documents: Blueprint, Call flow/);
-  assert.match(JSON.stringify(secondPayload.messages), /Diagram-Skill-v2 rules/);
+  assert.match(JSON.stringify(secondPayload.messages), /Client-facing documentation rules/);
   assert.match(JSON.stringify(secondPayload.messages), /Brand is Inspra AI/);
-  assert.match(JSON.stringify(secondPayload.messages), /Current State, Proposed Phase 1, and Monitored Operation/);
+  assert.match(JSON.stringify(secondPayload.messages), /separate write-up document/);
+  assert.doesNotMatch(JSON.stringify(secondPayload.messages), /Diagram-Skill-v2 aligned|internal model settings/);
   assert.match(result.blueprint, /LLM generated blueprint/);
   assert.match(result.callFlowChart, /Input -> Agent -> Handoff/);
   assert.equal(result.callScript, "");
