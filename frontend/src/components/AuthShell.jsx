@@ -20,9 +20,9 @@ export default function AuthShell({
       <aside className="auth2-rail" aria-hidden="true">
         <div className="auth2-railtop">
           <div className="brandmark">
-            <span className="brandmark-glyph">◈</span>
+            <img className="brandmark-glyph" src="/brand/inspra-logo.png" alt="" />
             <span className="brandmark-text">
-              <strong>INSPRA</strong>
+              <img className="brandmark-wordmark" src="/brand/inspra-wordmark.png" alt="Inspra" />
               <em>Voice workspace</em>
             </span>
           </div>

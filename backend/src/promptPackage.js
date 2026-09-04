@@ -335,12 +335,12 @@ async function generateDocsWithOpenRouter({ body, mode, packageOutput, apiKey, f
         {
           role: "system",
           content:
-            "You create client-facing AI voice-agent documentation using the Diagram-Skill-v2 delivery standard. Return strict JSON only with keys blueprint, callScript, callFlowChart, integrationBlueprint. Use plain business language. Do not output Python, matplotlib code, code fences, implementation code, raw transcript excerpts, recording metadata, or internal model/platform settings."
+            "You create client-facing AI voice-agent documentation for Inspra AI. Return strict JSON only with keys blueprint, callScript, callFlowChart, integrationBlueprint. These four documents must be meaningfully different: blueprint is the business implementation plan, callScript is spoken caller-facing voice copy, callFlowChart is routing and decision logic, and integrationBlueprint is systems/data/ownership/failure handling. Use plain business language. Do not output Python, matplotlib code, code fences, implementation code, raw transcript excerpts, recording metadata, bookmarks, internal tool names, or internal model/platform settings."
         },
         {
           role: "user",
           content: buildOpenRouterUserContent({
-            text: `${docsBrief}\n\nDiagram-Skill-v2 rules:\n- Brand is Inspra AI.\n- Use the swim lane blueprint as the default diagram type unless the source clearly requires another type.\n- The blueprint must follow this client-facing companion write-up structure exactly: Title Page, Context, Executive Summary, Current Situation, Recommended Approach, Diagram Walkthrough, Summary Table, Implementation Plan, Next Steps.\n- The Diagram Walkthrough must describe three aligned swim lanes: Current State, Proposed Phase 1, and Monitored Operation.\n- Include system/component names, roles, data movement, ownership, open questions, and next steps.\n- Call flow should be a readable decision/process flow in business language, not source code.\n- Integration blueprint should describe systems, data movement, ownership, handoffs, failure handling, and open questions.\n- Call script should be production-ready voice copy.\n- Never include Python, Mermaid, pseudo-code, code fences, or raw transcript lines.\n- Leave non-requested keys as empty strings.`,
+            text: `${docsBrief}\n\nClient-facing documentation rules:\n- Brand is Inspra AI.\n- Write only useful client-facing content. Do not mention how the document is generated.\n- Do not mention Diagram-Skill, swim lane alignment, bookmarks, Obsidian, YAML, model settings, internal tools, source-code framing, or raw transcript metadata.\n- Blueprint should use this structure: Title Page, Context, Executive Summary, Current Situation, Recommended Approach, Diagram Walkthrough, Summary Table, Implementation Plan, Next Steps.\n- Blueprint should explain context, recommended operating model, phased implementation, review points, and approval next steps.\n- Call script should be production-ready spoken voice copy with opening, permission, qualification questions, approved short answers, objection handling, booking/callback capture, close, and script guardrails. It must not read like a diagram or integration plan.\n- Call flow should be routing and decision/process logic with main path, branches, triggers, actions, confirmation rules, and QA scenarios. It must not read like a spoken script.\n- Integration blueprint should describe systems, data movement, ownership, handoffs, success evidence, failure handling, notifications, and open questions. It must not read like a call script.\n- For every blueprint, call flow, or integration diagram, ensure the text can support a separate write-up document with context, recommended approach, walkthrough, summary table, implementation plan, and next steps.\n- Never include Python, Mermaid, pseudo-code, code fences, raw transcript lines, or internal system information.\n- Leave non-requested keys as empty strings.`,
             attachments: body.attachments
           })
         }
@@ -1160,16 +1160,14 @@ Build a ${agentType} voice agent that answers only from approved source material
 
 ## Swimlane Blueprint
 Current State -> approved discovery notes, existing CRM/calendar, existing handoff process.
-Production Build -> ${platform} agent, Inspra prompt package, call script, call flow, integration blueprint, Diagram Skill Package.
-Monitored Operation -> Platform events, workflow logs, CRM/calendar writeback, release evidence, Obsidian learning.
+Production Build -> AI voice agent, approved call script, call flow, integration blueprint, and handoff rules.
+Monitored Operation -> Call outcomes, workflow logs, CRM/calendar writeback, release evidence, and improvement notes.
 
 ## Current Situation
 ${sourceBrief}
 
 ## Recommended Approach
 Use a voice-first assistant that gives short approved answers, asks no more than two discovery questions, and moves to booking or callback only when the caller shows fit.
-
-Recommended diagram type: Swim Lane Blueprint unless the source material clearly requires a decision tree, hub and spoke, before/after, linear process, or data architecture diagram.
 
 ## Diagram Walkthrough
 Current State -> Production Build -> Monitored Operation.
@@ -1202,46 +1200,107 @@ Default bucket: ${triage.bucket}. Safe fix: ${triage.safeToFix ? "yes" : "no"}. 
 }
 
 function buildCallScript({ client, agentType, voiceStyle }) {
-  return `# ${client} Call Script
+  return `# ${client} Production Call Script
 
-## Opening
-Thanks for calling ${client}. I can help with ${agentType.toLowerCase()} today.
+## Purpose
+This is the spoken conversation script for the ${agentType.toLowerCase()} AI voice agent. It is written as approved caller-facing copy, not as a system diagram or integration plan.
+
+## Opening Script
+"Hi, this is the AI assistant for ${client}. I can help with your enquiry and, if it makes sense, arrange the right next step with the team."
+
+## Permission and Direction
+"Just so I can point you in the right direction, I will ask a couple of quick questions."
 
 ## Qualification
-- What are you hoping to get help with?
-- Have you worked with us before?
-- What timeline are you considering?
+1. "What are you hoping to get help with today?"
+2. "Have you spoken with the team before, or is this a new enquiry?"
+3. "Is there a particular timeframe you are working towards?"
+
+## Approved Short Answers
+Use only the approved source material. Keep answers short, natural, and conversational. If the caller asks for pricing, legal advice, guarantees, technical commitments, or anything not confirmed in the approved material, offer a human follow-up.
 
 ## Objections
 Use a ${voiceStyle.toLowerCase()} tone. Acknowledge the concern, give the shortest approved answer, and return to the next useful question.
 
-## Close
-Confirm the next step, repeat any booking or callback details, and hand off if the caller needs a human.`;
+## Booking or Callback Capture
+"I can pass that through to the team. What is the best name and phone number for the callback?"
+"What date and time would suit you best?"
+
+## Close Script
+"Thanks, I have captured that. The team will review the details and follow up from here."
+
+## Script Guardrails
+- Do not mention internal tools, model settings, transcripts, or implementation notes.
+- Do not confirm a booking until the booking action has succeeded.
+- Do not collect email unless the approved workflow explicitly requires it.
+- Do not make promises on behalf of the human team.`;
 }
 
 function buildCallFlowChart({ platform }) {
-  return `Greeting -> Intent -> Collect required fields -> Branch
-  Branch: Booking -> Check availability -> Present slots -> Confirm choice -> Book -> Confirm only after success
-  Branch: Question -> Answer from approved knowledge -> Ask next useful question
-  Branch: Transfer -> Warm transfer if available -> Cold fallback if unavailable
-  Branch: Restricted topic -> Refuse safely -> Offer human callback
-  Close -> Summary -> End call
+  return `# Call Flow and Routing Logic
 
-Platform notes: validate ${platform} turn-taking, transfer, webhook, and post-call event behavior before launch.`;
+## Main Path
+START -> Greeting -> Permission -> Intent capture -> Required fields -> Routing decision -> Action -> Confirmation -> Close
+
+## Routing Branches
+| Branch | Trigger | Action | Confirmation Rule |
+|---|---|---|---|
+| Booking | Caller wants a meeting or appointment | Check availability, present options, create booking | Confirm only after the calendar or booking tool succeeds |
+| Callback | Caller is interested but cannot book now | Capture name, phone, preferred date, preferred time, and notes | Confirm that the request has been passed to the team |
+| Question | Caller asks an approved information question | Answer briefly from approved knowledge | Return to the next useful question |
+| Human help | Caller needs pricing, judgement, legal advice, or a nuanced answer | Offer specialist follow-up | Do not answer beyond approved material |
+| No answer or disconnected | Call does not connect or ends early | Log outcome and apply retry or nurture rule | Do not send qualified-lead notification unless intent was captured |
+| Opt out | Caller asks not to be contacted | Acknowledge and mark opt-out | End politely |
+
+## Platform Rule
+${platform} should receive a clear success or failure result from each tool action before the agent confirms the outcome to the caller.
+
+## QA Scenarios
+- Booking succeeds.
+- Booking fails.
+- Caller wants callback.
+- Caller asks an unknown question.
+- Caller opts out.
+- Caller disconnects before qualification.`;
 }
 
 function buildIntegrationBlueprint({ client, platform }) {
   return `# ${client} Integration Blueprint
 
+## Purpose
+This document defines the system handoffs, owners, data movement, and failure handling. It is not a call script and it is not the caller-facing conversation flow.
+
 ## Production Flow
-${platform} voice agent -> Tool call router -> Automation layer -> CRM/calendar/notification system
+${platform} voice platform -> AI voice agent -> Tool call router -> Automation layer -> CRM/calendar/notification system
 CRM/calendar/notification system -> Success or failure response -> Voice agent confirmation rules
-${platform} post-call event -> Monitor -> Work item ledger -> Release manager -> Obsidian wiki learning
+Post-call event -> Monitoring queue -> Review owner -> Improvement notes
 
-## Obsidian Flow
-Validated release evidence -> YAML properties -> Obsidian note -> reusable client learning -> future package context
+## Data Movement
+| Event | Data Captured | Destination | Success Evidence |
+|---|---|---|---|
+| Call connected | Caller number, transcript summary, intent | ${platform} session record and CRM note | Session ID and CRM note ID |
+| Booking requested | Name, phone, preferred time, selected slot | Calendar or booking system | Booking ID or event ID |
+| Callback requested | Name, phone, preferred date, preferred time, notes | CRM task and notification | Task ID and notification status |
+| No answer | Call attempt, timestamp, outcome | CRM or retry workflow | Logged no-answer outcome |
+| Tool failure | Error message and attempted action | Monitoring queue | Manual review item |
 
-Required YAML properties: tags, client, bucket, source_artifact, diagram_skill_aligned, status.
+## Ownership
+| Area | Owner | Notes |
+|---|---|---|
+| Voice agent behavior | Inspra AI | Uses the approved script, call flow, and handoff rules |
+| CRM/calendar records | Client operations owner | Confirms fields, permissions, and record ownership |
+| Notifications | Client approval owner | Confirms who receives booking, callback, and failure alerts |
+
+## Failure Handling
+- If booking fails, capture the caller details and route a callback task to the approved owner.
+- If CRM/calendar writeback fails, retain the call summary and flag the record for manual review.
+- If the caller asks for something outside the approved scope, offer a human follow-up.
+- The agent must not tell the caller that a booking, note, task, or notification was completed unless the connected system returns success.
+
+## Open Questions
+- Confirm the system of record for contact updates.
+- Confirm the notification owner for booked meetings and callbacks.
+- Confirm the fallback process when an integration is unavailable.
 
 Client: ${client}`;
 }
